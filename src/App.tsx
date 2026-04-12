@@ -1,20 +1,41 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useAuthStore } from './stores/auth-store'
+import Layout from './components/Layout'
+import LoginPage from './pages/LoginPage'
+import HomePage from './pages/HomePage'
+import ProhibitionDetailPage from './pages/ProhibitionDetailPage'
+import FailedPage from './pages/FailedPage'
+import ProhibitionNewPage from './pages/ProhibitionNewPage'
+import ConfessionsPage from './pages/ConfessionsPage'
+import SettingsPage from './pages/SettingsPage'
 
-function Placeholder({ name }: { name: string }) {
-  return <div className="min-h-screen bg-cream p-6 font-serif text-primary text-2xl font-bold">{name}</div>
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuthStore()
+  if (loading) return <div className="min-h-screen bg-cream flex items-center justify-center text-2xl">⏳</div>
+  if (!session) return <Navigate to="/login" replace />
+  return <>{children}</>
 }
 
 export default function App() {
+  const initialize = useAuthStore(s => s.initialize)
+
+  useEffect(() => {
+    initialize()
+  }, [initialize])
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Placeholder name="로그인" />} />
-        <Route path="/" element={<Placeholder name="오늘의 금기" />} />
-        <Route path="/prohibition/new" element={<Placeholder name="금기 추가" />} />
-        <Route path="/prohibition/:id" element={<Placeholder name="금기 상세" />} />
-        <Route path="/prohibition/:id/failed" element={<Placeholder name="실패" />} />
-        <Route path="/confessions" element={<Placeholder name="실패의 방" />} />
-        <Route path="/settings" element={<Placeholder name="설정" />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<AuthGuard><Layout /></AuthGuard>}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/prohibition/new" element={<ProhibitionNewPage />} />
+          <Route path="/prohibition/:id" element={<ProhibitionDetailPage />} />
+          <Route path="/prohibition/:id/failed" element={<FailedPage />} />
+          <Route path="/confessions" element={<ConfessionsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   )
