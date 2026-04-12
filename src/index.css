@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FFFDF7;
+  --color-cream-dark: #FFF8E7;
+  --color-cream-orange: #FFF3E0;
+  --color-success: #E8F5E8;
+  --color-success-text: #4CAF50;
+  --color-fail: #FFE8E8;
+  --color-fail-border: #FFE0D0;
+  --color-accent: #FF6B35;
+  --color-primary: #222222;
+  --font-serif: Georgia, 'Times New Roman', serif;
+}
+
+body {
+  background-color: var(--color-cream);
+  font-family: system-ui, -apple-system, sans-serif;
+}
