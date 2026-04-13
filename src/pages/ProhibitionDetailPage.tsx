@@ -47,17 +47,17 @@ export default function ProhibitionDetailPage() {
     navigate(`/prohibition/${prohibition.id}/failed`)
   }
 
-  const handleTimerComplete = async () => {
-    if (prohibition.status === 'active') {
-      await updateStatus(prohibition.id, 'succeeded')
-    }
+  const [timerDone, setTimerDone] = useState(false)
+
+  const handleTimerComplete = () => {
+    setTimerDone(true)
   }
 
   return (
     <div className="p-5">
       <div className="flex justify-between items-center mb-5">
         <button onClick={() => navigate(-1)} className="text-lg">← 뒤로</button>
-        <div className="text-sm text-gray-400">수정</div>
+        <button onClick={() => navigate(`/prohibition/new?edit=${prohibition.id}`)} className="text-sm text-gray-400">수정</button>
       </div>
 
       {/* Header */}
@@ -73,12 +73,21 @@ export default function ProhibitionDetailPage() {
 
       {/* Timer (timed type) */}
       {prohibition.type === 'timed' && prohibition.status === 'active' && prohibition.end_time && (
-        <div className="p-6 bg-white rounded-2xl border-[1.5px] border-success text-center mb-3">
-          <div className="text-xs text-success-text font-semibold mb-2">🟢 금기 시간 진행중</div>
-          <CountdownTimer endTime={prohibition.end_time} onComplete={handleTimerComplete} />
-          <div className="text-xs text-gray-400 mt-2">
-            {prohibition.start_time?.slice(0, 5)} ~ {prohibition.end_time?.slice(0, 5)}
-          </div>
+        <div className={`p-6 bg-white rounded-2xl border-[1.5px] ${timerDone ? 'border-gray-200' : 'border-success'} text-center mb-3`}>
+          {timerDone ? (
+            <>
+              <div className="text-xs text-gray-400 font-semibold mb-2">⏰ 금기 시간 종료</div>
+              <div className="text-sm text-gray-500 leading-relaxed">시간이 끝났어요!<br />성공했다면 아래 버튼을 눌러주세요.</div>
+            </>
+          ) : (
+            <>
+              <div className="text-xs text-success-text font-semibold mb-2">🟢 금기 시간 진행중</div>
+              <CountdownTimer endTime={prohibition.end_time} onComplete={handleTimerComplete} />
+              <div className="text-xs text-gray-400 mt-2">
+                {prohibition.start_time?.slice(0, 5)} ~ {prohibition.end_time?.slice(0, 5)}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -106,8 +115,8 @@ export default function ProhibitionDetailPage() {
         </div>
       )}
 
-      {prohibition.type === 'timed' && prohibition.status === 'active' && (
-        <div className="text-center mt-2 text-xs text-gray-300">타이머 종료 시 자동으로 성공 처리돼요</div>
+      {prohibition.type === 'timed' && prohibition.status === 'active' && !timerDone && (
+        <div className="text-center mt-2 text-xs text-gray-300">타이머 종료 후 직접 성공 버튼을 눌러주세요</div>
       )}
     </div>
   )

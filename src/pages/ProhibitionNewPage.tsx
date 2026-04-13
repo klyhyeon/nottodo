@@ -1,15 +1,19 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
 import { useProhibitionStore } from '../stores/prohibition-store'
+import { supabase } from '../lib/supabase'
 import type { ProhibitionType } from '../lib/types'
 
 const EMOJI_OPTIONS = ['🍕', '📱', '💸', '🍺', '🛒', '🎮', '☕', '🚬', '💤', '🚫']
 
 export default function ProhibitionNewPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
   const user = useAuthStore(s => s.user)
-  const create = useProhibitionStore(s => s.create)
+  const { create, prohibitions, deleteProhibition } = useProhibitionStore()
+  const editTarget = editId ? prohibitions.find(p => p.id === editId) : null
 
   const [title, setTitle] = useState('')
   const [emoji, setEmoji] = useState('🚫')
@@ -20,30 +24,64 @@ export default function ProhibitionNewPage() {
   const [isRecurring, setIsRecurring] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (editTarget) {
+      setTitle(editTarget.title)
+      setEmoji(editTarget.emoji)
+      setDifficulty(editTarget.difficulty)
+      setType(editTarget.type)
+      if (editTarget.start_time) setStartTime(editTarget.start_time.slice(0, 5))
+      if (editTarget.end_time) setEndTime(editTarget.end_time.slice(0, 5))
+      setIsRecurring(editTarget.is_recurring)
+    }
+  }, [editTarget])
+
   const handleSubmit = async () => {
     if (!user || !title.trim() || saving) return
     setSaving(true)
     try {
-      await create(user.id, {
-        title: title.trim(),
-        emoji,
-        difficulty,
-        type,
-        start_time: type === 'timed' ? startTime : undefined,
-        end_time: type === 'timed' ? endTime : undefined,
-        is_recurring: isRecurring,
-      })
+      if (editTarget) {
+        await supabase
+          .from('prohibitions')
+          .update({
+            title: title.trim(),
+            emoji,
+            difficulty,
+            type,
+            start_time: type === 'timed' ? startTime : null,
+            end_time: type === 'timed' ? endTime : null,
+            is_recurring: isRecurring,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editTarget.id)
+      } else {
+        await create(user.id, {
+          title: title.trim(),
+          emoji,
+          difficulty,
+          type,
+          start_time: type === 'timed' ? startTime : undefined,
+          end_time: type === 'timed' ? endTime : undefined,
+          is_recurring: isRecurring,
+        })
+      }
       navigate('/')
     } catch {
       setSaving(false)
     }
   }
 
+  const handleDelete = async () => {
+    if (!editTarget) return
+    await deleteProhibition(editTarget.id)
+    navigate('/')
+  }
+
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => navigate(-1)} className="text-lg">← 뒤로</button>
-        <h1 className="text-lg font-black font-serif text-primary">금기 추가</h1>
+        <h1 className="text-lg font-black font-serif text-primary">{editTarget ? '금기 수정' : '금기 추가'}</h1>
         <div className="w-10" />
       </div>
 
@@ -154,8 +192,17 @@ export default function ProhibitionNewPage() {
         disabled={!title.trim() || saving}
         className="w-full py-3.5 bg-primary text-white rounded-full font-bold text-sm disabled:opacity-40"
       >
-        {saving ? '저장 중...' : '금기 추가하기'}
+        {saving ? '저장 중...' : editTarget ? '수정하기' : '금기 추가하기'}
       </button>
+
+      {editTarget && (
+        <button
+          onClick={handleDelete}
+          className="w-full mt-2 py-3.5 bg-white border-[1.5px] border-fail-border rounded-full text-accent font-semibold text-sm"
+        >
+          금기 삭제하기
+        </button>
+      )}
     </div>
   )
 }

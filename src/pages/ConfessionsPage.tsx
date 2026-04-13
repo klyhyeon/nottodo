@@ -5,14 +5,17 @@ import ConfessionCard from '../components/ConfessionCard'
 import CategoryFilter from '../components/CategoryFilter'
 import type { Confession, BadgeType } from '../lib/types'
 
-const CATEGORIES = ['🍕', '📱', '💸', '🍺', '🛒', '🎮']
-
 export default function ConfessionsPage() {
   const user = useAuthStore(s => s.user)
   const [confessions, setConfessions] = useState<Confession[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [userBadges, setUserBadges] = useState<Record<string, BadgeType[]>>({})
+  const [categories, setCategories] = useState<string[]>([])
+
+  useEffect(() => {
+    fetchCategories()
+  }, [])
 
   useEffect(() => {
     fetchConfessions()
@@ -21,6 +24,16 @@ export default function ConfessionsPage() {
   useEffect(() => {
     if (user) fetchUserBadges()
   }, [user])
+
+  async function fetchCategories() {
+    const { data } = await supabase
+      .from('confessions')
+      .select('category')
+    if (data) {
+      const unique = [...new Set(data.map(d => d.category))].filter(Boolean)
+      setCategories(unique)
+    }
+  }
 
   async function fetchConfessions() {
     setLoading(true)
@@ -97,7 +110,7 @@ export default function ConfessionsPage() {
       </div>
 
       <div className="mb-4">
-        <CategoryFilter categories={CATEGORIES} selected={selectedCategory} onSelect={setSelectedCategory} />
+        <CategoryFilter categories={categories} selected={selectedCategory} onSelect={setSelectedCategory} />
       </div>
 
       {loading ? (
