@@ -22,6 +22,7 @@ export default function ProhibitionNewPage() {
   const [startTime, setStartTime] = useState('22:00')
   const [endTime, setEndTime] = useState('08:00')
   const [isRecurring, setIsRecurring] = useState(false)
+  const [verifyDeadlineHours, setVerifyDeadlineHours] = useState(2)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function ProhibitionNewPage() {
       if (editTarget.start_time) setStartTime(editTarget.start_time.slice(0, 5))
       if (editTarget.end_time) setEndTime(editTarget.end_time.slice(0, 5))
       setIsRecurring(editTarget.is_recurring)
+      setVerifyDeadlineHours(editTarget.verify_deadline_hours ?? 2)
     }
   }, [editTarget])
 
@@ -51,6 +53,7 @@ export default function ProhibitionNewPage() {
             start_time: type === 'timed' ? startTime : null,
             end_time: type === 'timed' ? endTime : null,
             is_recurring: isRecurring,
+            verify_deadline_hours: verifyDeadlineHours,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editTarget.id)
@@ -63,6 +66,7 @@ export default function ProhibitionNewPage() {
           start_time: type === 'timed' ? startTime : undefined,
           end_time: type === 'timed' ? endTime : undefined,
           is_recurring: isRecurring,
+          verify_deadline_hours: verifyDeadlineHours,
         })
       }
       navigate('/')
@@ -172,6 +176,33 @@ export default function ProhibitionNewPage() {
           </label>
         </div>
       )}
+
+      {/* Verify Deadline */}
+      <div className="mb-4">
+        <span className="text-sm font-bold text-primary mb-1.5 block">
+          인증 마감 시간
+          <span className="font-normal text-gray-400 ml-1">
+            ({type === 'timed' ? '종료' : '자정'} 후 {verifyDeadlineHours}시간)
+          </span>
+        </span>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={12}
+            value={verifyDeadlineHours}
+            onChange={e => setVerifyDeadlineHours(Number(e.target.value))}
+            className="flex-1 accent-primary"
+          />
+          <span className="text-sm font-semibold text-primary w-16 text-right">{verifyDeadlineHours}시간</span>
+        </div>
+        <div className="text-xs text-gray-400 mt-1">
+          {verifyDeadlineHours === 0
+            ? `${type === 'timed' ? '금기 종료 즉시' : '자정에'} 미인증 처리`
+            : `${type === 'timed' ? '금기 종료' : '자정'} 후 ${verifyDeadlineHours}시간까지 인증 가능`
+          }
+        </div>
+      </div>
 
       {/* Recurring */}
       <label className="flex items-center gap-3 mb-8 cursor-pointer">

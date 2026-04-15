@@ -29,7 +29,7 @@ describe('calculateStreak', () => {
   const makeProhibition = (date: string, status: Prohibition['status']): Prohibition => ({
     id: '1', user_id: '1', title: 'test', emoji: '🍕', difficulty: 1,
     type: 'all_day', start_time: null, end_time: null,
-    date, status, is_recurring: false,
+    date, status, is_recurring: false, verify_deadline_hours: 2,
     created_at: '', updated_at: '',
   })
 

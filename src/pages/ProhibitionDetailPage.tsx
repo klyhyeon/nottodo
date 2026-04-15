@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
-import { useProhibitionStore, calculateStreak } from '../stores/prohibition-store'
+import { useProhibitionStore, calculateStreak, getVerifyDeadline } from '../stores/prohibition-store'
 import WeekHistory from '../components/WeekHistory'
 import CountdownTimer from '../components/CountdownTimer'
 import type { Prohibition } from '../lib/types'
@@ -115,8 +115,16 @@ export default function ProhibitionDetailPage() {
         </div>
       )}
 
-      {prohibition.type === 'timed' && prohibition.status === 'active' && !timerDone && (
-        <div className="text-center mt-2 text-xs text-gray-300">타이머 종료 후 직접 성공 버튼을 눌러주세요</div>
+      {prohibition.status === 'active' && (
+        <div className="text-center mt-2 text-xs text-gray-300">
+          {(() => {
+            const deadline = getVerifyDeadline(prohibition)
+            const h = deadline.getHours()
+            const m = deadline.getMinutes()
+            const dateStr = deadline.getDate() !== new Date().getDate() ? '내일 ' : ''
+            return `인증 마감: ${dateStr}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}까지`
+          })()}
+        </div>
       )}
     </div>
   )

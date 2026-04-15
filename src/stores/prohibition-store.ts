@@ -6,6 +6,29 @@ export function isValidTransition(from: ProhibitionStatus, to: ProhibitionStatus
   return from === 'active' && (to === 'succeeded' || to === 'failed')
 }
 
+export function getVerifyDeadline(prohibition: Prohibition): Date {
+  const date = new Date(prohibition.date + 'T00:00:00')
+  if (prohibition.type === 'timed' && prohibition.end_time) {
+    const [h, m] = prohibition.end_time.split(':').map(Number)
+    date.setHours(h, m, 0, 0)
+    // end_time이 start_time보다 작으면 자정을 넘긴 것 → 다음 날
+    if (prohibition.start_time) {
+      const [sh] = prohibition.start_time.split(':').map(Number)
+      if (h < sh) date.setDate(date.getDate() + 1)
+    }
+  } else {
+    // all_day: 자정이 기준
+    date.setDate(date.getDate() + 1)
+    date.setHours(0, 0, 0, 0)
+  }
+  date.setHours(date.getHours() + (prohibition.verify_deadline_hours ?? 0))
+  return date
+}
+
+export function isDeadlinePassed(prohibition: Prohibition): boolean {
+  return new Date() > getVerifyDeadline(prohibition)
+}
+
 export function calculateStreak(prohibitions: Prohibition[]): number {
   const sorted = [...prohibitions].sort((a, b) => b.date.localeCompare(a.date))
   let streak = 0
@@ -27,6 +50,7 @@ interface CreateProhibitionInput {
   start_time?: string
   end_time?: string
   is_recurring: boolean
+  verify_deadline_hours: number
 }
 
 interface ProhibitionState {
@@ -46,15 +70,36 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
   fetchToday: async (userId: string) => {
     set({ loading: true })
     const today = new Date().toISOString().split('T')[0]
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+    // 오늘 + 어제(아직 인증 마감 안 된 것) 조회
     const { data, error } = await supabase
       .from('prohibitions')
       .select('*')
       .eq('user_id', userId)
-      .eq('date', today)
+      .in('date', [today, yesterday])
       .order('created_at', { ascending: true })
 
     if (error) throw error
-    set({ prohibitions: (data ?? []) as Prohibition[], loading: false })
+
+    const all = (data ?? []) as Prohibition[]
+
+    // 인증 마감 지난 active 금기 → unverified로 변경
+    const expired = all.filter(p => p.status === 'active' && isDeadlinePassed(p))
+    for (const p of expired) {
+      await supabase
+        .from('prohibitions')
+        .update({ status: 'unverified', updated_at: new Date().toISOString() })
+        .eq('id', p.id)
+      p.status = 'unverified'
+    }
+
+    // 어제 것 중 마감 안 지난 active만 표시 + 오늘 것 전부
+    const visible = all.filter(p =>
+      p.date === today || (p.date === yesterday && p.status === 'active' && !isDeadlinePassed(p))
+    )
+
+    set({ prohibitions: visible, loading: false })
   },
 
   fetchHistory: async (userId: string, title: string) => {

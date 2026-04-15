@@ -28,6 +28,7 @@ CREATE TABLE prohibitions (
   date date NOT NULL DEFAULT CURRENT_DATE,
   status prohibition_status NOT NULL DEFAULT 'active',
   is_recurring boolean NOT NULL DEFAULT false,
+  verify_deadline_hours int NOT NULL DEFAULT 2 CHECK (verify_deadline_hours BETWEEN 0 AND 12),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -35,8 +36,8 @@ CREATE TABLE prohibitions (
 ALTER TABLE prohibitions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can read own prohibitions" ON prohibitions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own prohibitions" ON prohibitions FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own today prohibitions" ON prohibitions FOR UPDATE USING (
-  auth.uid() = user_id AND date = CURRENT_DATE
+CREATE POLICY "Users can update own recent prohibitions" ON prohibitions FOR UPDATE USING (
+  auth.uid() = user_id AND date >= CURRENT_DATE - INTERVAL '1 day'
 );
 CREATE POLICY "Users can delete own prohibitions" ON prohibitions FOR DELETE USING (auth.uid() = user_id);
 
