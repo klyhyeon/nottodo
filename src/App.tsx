@@ -17,17 +17,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function GuestOnly({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuthStore()
+  if (loading) return <div className="min-h-screen bg-cream flex items-center justify-center text-2xl">⏳</div>
+  if (session) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   const initialize = useAuthStore(s => s.initialize)
 
   useEffect(() => {
-    initialize()
+    const cleanup = initialize()
+    return () => { cleanup.then(unsub => unsub?.()) }
   }, [initialize])
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
         <Route element={<AuthGuard><Layout /></AuthGuard>}>
           <Route path="/" element={<HomePage />} />
           <Route path="/prohibition/new" element={<ProhibitionNewPage />} />

@@ -22,7 +22,7 @@ export default function ProhibitionCard({ prohibition }: Props) {
 
   return (
     <Link
-      to={status === 'failed' ? `/prohibition/${id}/failed` : `/prohibition/${id}`}
+      to={`/prohibition/${id}`}
       className={`flex items-center p-4 bg-white rounded-2xl gap-3 border-[1.5px] ${
         status === 'succeeded' ? 'border-success' : status === 'failed' ? 'border-fail-border' : 'border-gray-100'
       }`}

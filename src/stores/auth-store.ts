@@ -8,7 +8,7 @@ interface AuthState {
   session: Session | null
   user: User | null
   loading: boolean
-  initialize: () => Promise<void>
+  initialize: () => Promise<(() => void) | undefined>
   loginWithKakao: () => Promise<void>
   logout: () => Promise<void>
 }
@@ -27,7 +27,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false })
     }
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
         const user = await fetchOrCreateUser(session.user.id)
         set({ session, user })
@@ -35,6 +35,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ session: null, user: null })
       }
     })
+
+    return () => subscription.unsubscribe()
   },
 
   loginWithKakao: async () => {

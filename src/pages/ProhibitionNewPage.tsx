@@ -43,20 +43,27 @@ export default function ProhibitionNewPage() {
     setSaving(true)
     try {
       if (editTarget) {
-        await supabase
+        const updates = {
+          title: title.trim(),
+          emoji,
+          difficulty,
+          type,
+          start_time: type === 'timed' ? startTime : null,
+          end_time: type === 'timed' ? endTime : null,
+          is_recurring: isRecurring,
+          verify_deadline_hours: verifyDeadlineHours,
+          updated_at: new Date().toISOString(),
+        }
+        const { error } = await supabase
           .from('prohibitions')
-          .update({
-            title: title.trim(),
-            emoji,
-            difficulty,
-            type,
-            start_time: type === 'timed' ? startTime : null,
-            end_time: type === 'timed' ? endTime : null,
-            is_recurring: isRecurring,
-            verify_deadline_hours: verifyDeadlineHours,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updates)
           .eq('id', editTarget.id)
+        if (error) throw error
+        useProhibitionStore.setState(s => ({
+          prohibitions: s.prohibitions.map(p =>
+            p.id === editTarget.id ? { ...p, ...updates } : p
+          ),
+        }))
       } else {
         await create(user.id, {
           title: title.trim(),
@@ -77,6 +84,7 @@ export default function ProhibitionNewPage() {
 
   const handleDelete = async () => {
     if (!editTarget) return
+    if (!window.confirm('이 금기를 삭제할까요?')) return
     await deleteProhibition(editTarget.id)
     navigate('/')
   }

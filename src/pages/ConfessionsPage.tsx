@@ -48,18 +48,25 @@ export default function ConfessionsPage() {
     }
 
     const { data } = await query
-    if (data) {
-      const withCounts = await Promise.all(
-        data.map(async (c: Confession) => {
-          const { data: counts } = await supabase
-            .from('confession_badge_counts')
-            .select('*')
-            .eq('confession_id', c.id)
-            .single()
-          return { ...c, badge_counts: counts ?? { me_too_count: 0, tomorrow_count: 0, fighting_count: 0 } }
-        })
+    if (data && data.length > 0) {
+      const ids = data.map((c: Confession) => c.id)
+      const { data: allCounts } = await supabase
+        .from('confession_badge_counts')
+        .select('*')
+        .in('confession_id', ids)
+
+      const countsMap = new Map(
+        (allCounts ?? []).map((c: { confession_id: string }) => [c.confession_id, c])
       )
-      setConfessions(withCounts)
+      const defaultCounts = { me_too_count: 0, tomorrow_count: 0, fighting_count: 0 }
+      setConfessions(
+        data.map((c: Confession) => ({
+          ...c,
+          badge_counts: countsMap.get(c.id) ?? defaultCounts,
+        }))
+      )
+    } else {
+      setConfessions([])
     }
     setLoading(false)
   }

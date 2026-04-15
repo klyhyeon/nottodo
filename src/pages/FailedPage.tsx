@@ -45,7 +45,7 @@ export default function FailedPage() {
   const successRate = stats.total > 0 ? Math.round((stats.succeeded / stats.total) * 100) : 0
 
   const handleConfess = async () => {
-    if (!user || !content.trim() || posting) return
+    if (!user || !content.trim() || content.trim().length > 300 || posting) return
     setPosting(true)
     const { error } = await supabase.from('confessions').insert({
       user_id: user.id,
