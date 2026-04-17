@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
 import ConfessionCard from '../components/ConfessionCard'
 import CategoryFilter from '../components/CategoryFilter'
-import type { Confession, BadgeType } from '../lib/types'
+import type { Confession, BadgeType, BadgeCounts } from '../lib/types'
 
 export default function ConfessionsPage() {
   const user = useAuthStore(s => s.user)
@@ -49,19 +49,30 @@ export default function ConfessionsPage() {
 
     const { data } = await query
     if (data && data.length > 0) {
-      const ids = data.map((c: Confession) => c.id)
+      const ids = data.map((c: { id: string }) => c.id)
       const { data: allCounts } = await supabase
         .from('confession_badge_counts')
         .select('*')
         .in('confession_id', ids)
 
-      const countsMap = new Map(
-        (allCounts ?? []).map((c: { confession_id: string }) => [c.confession_id, c])
-      )
-      const defaultCounts = { me_too_count: 0, tomorrow_count: 0, fighting_count: 0 }
+      const countsMap = new Map<string, BadgeCounts>()
+      for (const c of allCounts ?? []) {
+        countsMap.set(c.confession_id, {
+          me_too_count: c.me_too_count ?? 0,
+          tomorrow_count: c.tomorrow_count ?? 0,
+          fighting_count: c.fighting_count ?? 0,
+        })
+      }
+      const defaultCounts: BadgeCounts = { me_too_count: 0, tomorrow_count: 0, fighting_count: 0 }
       setConfessions(
-        data.map((c: Confession) => ({
-          ...c,
+        data.map((c) => ({
+          id: c.id,
+          user_id: '',
+          prohibition_id: c.prohibition_id,
+          content: c.content,
+          category: c.category,
+          created_at: c.created_at,
+          user: Array.isArray(c.user) ? c.user[0] : c.user,
           badge_counts: countsMap.get(c.id) ?? defaultCounts,
         }))
       )

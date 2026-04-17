@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAnonymousName, ADJECTIVES, ANIMALS } from '../lib/anonymous-name'
+import { generateAnonymousName, ANIMALS } from '../lib/anonymous-name'
 
 describe('generateAnonymousName', () => {
   it('returns an object with name and emoji', () => {

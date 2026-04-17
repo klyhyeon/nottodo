@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
 import { useProhibitionStore } from '../stores/prohibition-store'
 import { supabase } from '../lib/supabase'
-import type { Prohibition } from '../lib/types'
 
 export default function FailedPage() {
   const { id } = useParams<{ id: string }>()
