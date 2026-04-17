@@ -10,7 +10,10 @@ export default function HomePage() {
   const { prohibitions, loading, fetchToday } = useProhibitionStore()
 
   useEffect(() => {
-    if (user) fetchToday(user.id)
+    if (!user) return
+    fetchToday(user.id)
+    const interval = setInterval(() => fetchToday(user.id), 60_000)
+    return () => clearInterval(interval)
   }, [user, fetchToday])
 
   const today = new Date()
