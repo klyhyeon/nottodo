@@ -94,6 +94,35 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       p.status = 'unverified'
     }
 
+    // 반복 금기: 어제 is_recurring=true인데 오늘 복사본이 없으면 생성
+    const todayItems = all.filter(p => p.date === today)
+    const yesterdayRecurring = all.filter(p =>
+      p.date === yesterday && p.is_recurring
+    )
+    const todayTitles = new Set(todayItems.map(p => p.title))
+
+    for (const rec of yesterdayRecurring) {
+      if (!todayTitles.has(rec.title)) {
+        const { data: newP } = await supabase
+          .from('prohibitions')
+          .insert({
+            user_id: userId,
+            title: rec.title,
+            emoji: rec.emoji,
+            difficulty: rec.difficulty,
+            type: rec.type,
+            start_time: rec.start_time,
+            end_time: rec.end_time,
+            date: today,
+            is_recurring: true,
+            verify_deadline_hours: rec.verify_deadline_hours,
+          })
+          .select()
+          .single()
+        if (newP) all.push(newP as Prohibition)
+      }
+    }
+
     // 어제 것 중 마감 안 지난 active만 표시 + 오늘 것 전부
     const visible = all.filter(p =>
       p.date === today || (p.date === yesterday && p.status === 'active' && !isDeadlinePassed(p))
