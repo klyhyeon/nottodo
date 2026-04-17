@@ -52,7 +52,6 @@ export default function ProhibitionNewPage() {
           end_time: type === 'timed' ? endTime : null,
           is_recurring: isRecurring,
           verify_deadline_hours: verifyDeadlineHours,
-          updated_at: new Date().toISOString(),
         }
         const { error } = await supabase
           .from('prohibitions')

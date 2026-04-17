@@ -89,7 +89,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     for (const p of expired) {
       await supabase
         .from('prohibitions')
-        .update({ status: 'unverified', updated_at: new Date().toISOString() })
+        .update({ status: 'unverified' })
         .eq('id', p.id)
       p.status = 'unverified'
     }
@@ -133,15 +133,15 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       throw new Error(`Invalid transition: ${prohibition?.status} → ${status}`)
     }
 
-    const { error } = await supabase
-      .from('prohibitions')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id)
+    const { error } = await supabase.rpc('update_prohibition_status', {
+      prohibition_id: id,
+      new_status: status,
+    })
 
     if (error) throw error
     set({
       prohibitions: get().prohibitions.map(p =>
-        p.id === id ? { ...p, status, updated_at: new Date().toISOString() } : p
+        p.id === id ? { ...p, status } : p
       ),
     })
   },

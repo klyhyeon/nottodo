@@ -39,7 +39,7 @@ export default function ConfessionsPage() {
     setLoading(true)
     let query = supabase
       .from('confessions')
-      .select('*, user:users(anonymous_name, anonymous_emoji)')
+      .select('id, prohibition_id, content, category, created_at, user:users(anonymous_name, anonymous_emoji)')
       .order('created_at', { ascending: false })
       .limit(50)
 
