@@ -94,15 +94,23 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       p.status = 'unverified'
     }
 
-    // 반복 금기: 어제 is_recurring=true인데 오늘 복사본이 없으면 생성
-    const todayItems = all.filter(p => p.date === today)
-    const yesterdayRecurring = all.filter(p =>
-      p.date === yesterday && p.is_recurring
-    )
-    const todayTitles = new Set(todayItems.map(p => p.title))
+    // 반복 금기: 오늘 복사본이 없으면 가장 최근 반복 금기를 기반으로 생성
+    const todayTitles = new Set(all.filter(p => p.date === today).map(p => p.title))
 
-    for (const rec of yesterdayRecurring) {
-      if (!todayTitles.has(rec.title)) {
+    const { data: recurringTemplates } = await supabase
+      .from('prohibitions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_recurring', true)
+      .lt('date', today)
+      .order('date', { ascending: false })
+
+    if (recurringTemplates) {
+      // 같은 title에서 가장 최근 것만 사용
+      const seen = new Set<string>()
+      for (const rec of recurringTemplates as Prohibition[]) {
+        if (seen.has(rec.title) || todayTitles.has(rec.title)) continue
+        seen.add(rec.title)
         const { data: newP } = await supabase
           .from('prohibitions')
           .insert({
