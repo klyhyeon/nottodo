@@ -140,9 +140,8 @@ options: {
 ## 이후 업데이트 시
 
 ```bash
-# 코드 수정 후
-npm run build
-npx cap sync ios
+# 코드 수정 후 빌드 및 iOS 동기화 (매번 필수)
+npm run build && npx cap sync ios
 # Xcode에서 Build 번호 올리고 Archive > Upload
 ```
 

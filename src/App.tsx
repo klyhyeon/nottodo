@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { App as CapApp } from '@capacitor/app'
+import { supabase } from './lib/supabase'
 import { useAuthStore } from './stores/auth-store'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
@@ -29,7 +32,30 @@ export default function App() {
 
   useEffect(() => {
     const cleanup = initialize()
-    return () => { cleanup.then(unsub => unsub?.()) }
+
+    if (Capacitor.isNativePlatform()) {
+      // 딥링크 콜백 (외부 브라우저에서 돌아온 경우 대비)
+      CapApp.addListener('appUrlOpen', async ({ url }) => {
+        if (url.includes('access_token') || url.includes('code=')) {
+          const hashOrQuery = url.includes('#') ? url.split('#')[1] : url.split('?')[1]
+          if (hashOrQuery) {
+            const params = new URLSearchParams(hashOrQuery)
+            const accessToken = params.get('access_token')
+            const refreshToken = params.get('refresh_token')
+            if (accessToken && refreshToken) {
+              await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+            }
+          }
+        }
+      })
+    }
+
+    return () => {
+      cleanup.then(unsub => unsub?.())
+      if (Capacitor.isNativePlatform()) {
+        CapApp.removeAllListeners()
+      }
+    }
   }, [initialize])
 
   return (

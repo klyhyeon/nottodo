@@ -8,11 +8,11 @@ const tabs = [
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
-      <main className="flex-1 pb-20">
+    <div className="min-h-screen bg-cream flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <main className="flex-1 pb-24">
         <Outlet />
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 bg-cream border-t border-dashed border-gray-200">
+      <nav className="fixed bottom-0 left-0 right-0 bg-cream border-t border-dashed border-gray-200" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex justify-around py-3 max-w-md mx-auto">
           {tabs.map(tab => (
             <NavLink
