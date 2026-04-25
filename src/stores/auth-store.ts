@@ -43,40 +43,61 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   loginWithKakao: async () => {
     if (Capacitor.isNativePlatform()) {
+      const CALLBACK_URL = 'https://klyhyeon.github.io/nottodo/auth-callback.html'
       const { data } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
-          redirectTo: 'https://bvkdawbdcjrnduuuzwhl.supabase.co',
+          redirectTo: CALLBACK_URL,
           skipBrowserRedirect: true,
         },
       })
       if (data?.url) {
-        // URL 변경 감지 리스너 등록
+        let processed = false
+
         await InAppBrowser.addListener('urlChangeEvent', async ({ url }) => {
-          if (url.includes('access_token') || url.includes('#access_token')) {
-            const hash = url.includes('#') ? url.split('#')[1] : url.split('?')[1]
-            if (hash) {
-              const params = new URLSearchParams(hash)
-              const accessToken = params.get('access_token')
-              const refreshToken = params.get('refresh_token')
-              if (accessToken && refreshToken) {
-                await supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                })
-              }
-            }
+          console.log('[OAuth] urlChange:', url.substring(0, 100))
+          if (processed) return
+          if (!url.includes('access_token')) return
+          processed = true
+
+          // 1. 토큰 추출
+          const hash = url.includes('#') ? url.split('#')[1] : url.split('?')[1]
+          if (!hash) return
+          const params = new URLSearchParams(hash)
+          const accessToken = params.get('access_token')
+          const refreshToken = params.get('refresh_token')
+          console.log('[OAuth] tokens found:', !!accessToken, !!refreshToken)
+          if (!accessToken || !refreshToken) return
+
+          // 2. 브라우저 닫기 (콜백 페이지에 "로그인 중..." 표시됨)
+          try {
             await InAppBrowser.close()
-            await InAppBrowser.removeAllListeners()
-          }
+          } catch (_) { /* ignore */ }
+
+          // 3. 브라우저 닫힌 후 세션 설정
+          setTimeout(async () => {
+            try {
+              console.log('[OAuth] setting session...')
+              const { data: sessionData, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              })
+              console.log('[OAuth] setSession result:', error ? `error: ${error.message}` : 'success')
+              if (!error && sessionData.session) {
+                const user = await fetchOrCreateUser(sessionData.session.user.id)
+                console.log('[OAuth] user fetched, state updated')
+                set({ session: sessionData.session, user })
+              }
+            } catch (err) {
+              console.error('[OAuth] error:', err)
+            }
+          }, 300)
         })
 
-        // 사용자가 웹뷰를 닫았을 때 리스너 정리
         await InAppBrowser.addListener('closeEvent', async () => {
           await InAppBrowser.removeAllListeners()
         })
 
-        // WKWebView 기반 인앱 브라우저로 OAuth 페이지 열기
         await InAppBrowser.openWebView({
           url: data.url,
           title: '카카오 로그인',

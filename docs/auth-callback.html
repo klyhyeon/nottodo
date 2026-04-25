@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOT TO DO - 로그인</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #FFFDF7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #222;
+    }
+    .container {
+      text-align: center;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #eee;
+      border-top-color: #222;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    p { font-size: 14px; color: #999; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>로그인 중...</h1>
+    <p>잠시만 기다려주세요</p>
+  </div>
+</body>
+</html>
