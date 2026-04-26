@@ -47,12 +47,6 @@ export default function ProhibitionDetailPage() {
     navigate(`/prohibition/${prohibition.id}/failed`)
   }
 
-  const handleDelete = async () => {
-    if (!window.confirm('이 금기를 삭제할까요?')) return
-    await useProhibitionStore.getState().deleteProhibition(prohibition.id)
-    navigate('/')
-  }
-
   const [timerDone, setTimerDone] = useState(false)
 
   const handleTimerComplete = () => {
@@ -63,11 +57,7 @@ export default function ProhibitionDetailPage() {
     <div className="p-5">
       <div className="flex justify-between items-center mb-5">
         <button onClick={() => navigate(-1)} className="text-lg">← 뒤로</button>
-        {prohibition.status === 'active' ? (
-          <button onClick={() => navigate(`/prohibition/new?edit=${prohibition.id}`)} className="text-sm text-gray-400">수정</button>
-        ) : (
-          <button onClick={handleDelete} className="text-sm text-accent">삭제</button>
-        )}
+        <button onClick={() => navigate(`/prohibition/new?edit=${prohibition.id}`)} className="text-sm text-gray-400">수정</button>
       </div>
 
       {/* Header */}

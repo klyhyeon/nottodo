@@ -265,15 +265,12 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
 
   deleteProhibition: async (id: string) => {
     const prohibition = get().prohibitions.find(p => p.id === id)
-    const now = new Date().toISOString()
 
-    // 반복 금기면 같은 그룹 전체 soft delete (미래 재생성 방지)
     if (prohibition?.is_recurring && prohibition.recurring_group_id) {
-      const { error } = await supabase
-        .from('prohibitions')
-        .update({ deleted_at: now })
-        .eq('recurring_group_id', prohibition.recurring_group_id)
-        .is('deleted_at', null)
+      // 반복 금기: RPC로 같은 그룹 전체 soft delete (RLS 우회)
+      const { error } = await supabase.rpc('delete_recurring_group', {
+        group_id: prohibition.recurring_group_id,
+      })
       if (error) throw error
       set({
         prohibitions: get().prohibitions.filter(
@@ -283,7 +280,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     } else {
       const { error } = await supabase
         .from('prohibitions')
-        .update({ deleted_at: now })
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id)
       if (error) throw error
       set({ prohibitions: get().prohibitions.filter(p => p.id !== id) })
