@@ -8,7 +8,7 @@ const base: Prohibition = {
   id: '1', user_id: 'u1', title: '야식 먹지 않기', emoji: '🍕',
   difficulty: 3, type: 'all_day', start_time: null, end_time: null,
   date: '2026-04-13', status: 'active', is_recurring: false, recurring_group_id: null, verify_deadline_hours: 2,
-  created_at: '', updated_at: '',
+  created_at: '', updated_at: '', deleted_at: null,
 }
 
 function renderCard(overrides: Partial<Prohibition> = {}) {
