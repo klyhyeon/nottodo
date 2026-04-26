@@ -69,8 +69,10 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
 
   fetchToday: async (userId: string) => {
     set({ loading: true })
-    const today = new Date().toISOString().split('T')[0]
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const yd = new Date(now.getTime() - 86400000)
+    const yesterday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, '0')}-${String(yd.getDate()).padStart(2, '0')}`
 
     // 오늘 + 어제(아직 인증 마감 안 된 것) 조회
     const { data, error } = await supabase
@@ -139,9 +141,9 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       }
     }
 
-    // 어제 것 중 마감 안 지난 active만 표시 + 오늘 것 전부
+    // 오늘 것 전부 + 어제 것 중 마감 안 지난 것 (상태 무관)
     const visible = all.filter(p =>
-      p.date === today || (p.date === yesterday && p.status === 'active' && !isDeadlinePassed(p))
+      p.date === today || (p.date === yesterday && !isDeadlinePassed(p))
     )
 
     set({ prohibitions: visible, loading: false })
@@ -162,7 +164,8 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
   },
 
   create: async (userId: string, input: CreateProhibitionInput) => {
-    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const { data, error } = await supabase
       .from('prohibitions')
       .insert({ ...input, user_id: userId, date: today })
