@@ -15,14 +15,22 @@ import SettingsPage from './pages/SettingsPage'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuthStore()
-  if (loading) return <div className="min-h-screen bg-cream flex items-center justify-center text-2xl">⏳</div>
+  if (loading) return <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-5">
+      <div className="w-10 h-10 border-3 border-gray-200 border-t-primary rounded-full animate-spin" />
+      <p className="text-lg font-bold text-primary">로그인 중...</p>
+      <p className="text-sm text-gray-400">잠시만 기다려주세요</p>
+    </div>
   if (!session) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
 function GuestOnly({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuthStore()
-  if (loading) return <div className="min-h-screen bg-cream flex items-center justify-center text-2xl">⏳</div>
+  if (loading) return <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-5">
+      <div className="w-10 h-10 border-3 border-gray-200 border-t-primary rounded-full animate-spin" />
+      <p className="text-lg font-bold text-primary">로그인 중...</p>
+      <p className="text-sm text-gray-400">잠시만 기다려주세요</p>
+    </div>
   if (session) return <Navigate to="/" replace />
   return <>{children}</>
 }

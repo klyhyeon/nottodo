@@ -31,10 +31,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        const user = await fetchOrCreateUser(session.user.id)
-        set({ session, user })
+        set({ session, loading: false })
+        fetchOrCreateUser(session.user.id)
+          .then(user => set({ user }))
+          .catch(err => console.error('[Auth] fetchOrCreateUser failed:', err))
       } else {
-        set({ session: null, user: null })
+        set({ session: null, user: null, loading: false })
       }
     })
 
@@ -69,33 +71,30 @@ export const useAuthStore = create<AuthState>((set) => ({
           console.log('[OAuth] tokens found:', !!accessToken, !!refreshToken)
           if (!accessToken || !refreshToken) return
 
-          // 2. 브라우저 닫기 (콜백 페이지에 "로그인 중..." 표시됨)
+          // 로딩 상태로 전환 (로그인 페이지 대신 로딩 표시)
+          set({ loading: true })
+
+          // 2. 브라우저 닫기 + 리스너 정리 (반드시 setSession 전에)
+          console.log('[OAuth] closing browser...')
+          try { await InAppBrowser.close() } catch (_) { /* ignore */ }
+          try { await InAppBrowser.removeAllListeners() } catch (_) { /* ignore */ }
+
+          // 3. WKWebView 프로세스 종료 대기 (네트워크 블로킹 해제)
+          await new Promise(r => setTimeout(r, 1500))
+
+          // 4. 세션 설정 → onAuthStateChange가 자동으로 상태 업데이트
+          console.log('[OAuth] setting session...')
           try {
-            await InAppBrowser.close()
-          } catch (_) { /* ignore */ }
-
-          // 3. 브라우저 닫힌 후 세션 설정
-          setTimeout(async () => {
-            try {
-              console.log('[OAuth] setting session...')
-              const { data: sessionData, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              })
-              console.log('[OAuth] setSession result:', error ? `error: ${error.message}` : 'success')
-              if (!error && sessionData.session) {
-                const user = await fetchOrCreateUser(sessionData.session.user.id)
-                console.log('[OAuth] user fetched, state updated')
-                set({ session: sessionData.session, user })
-              }
-            } catch (err) {
-              console.error('[OAuth] error:', err)
-            }
-          }, 300)
-        })
-
-        await InAppBrowser.addListener('closeEvent', async () => {
-          await InAppBrowser.removeAllListeners()
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+            console.log('[OAuth] setSession result:', error ? `error: ${error.message}` : 'success')
+          } catch (err) {
+            console.error('[OAuth] setSession error:', err)
+          } finally {
+            set({ loading: false })
+          }
         })
 
         await InAppBrowser.openWebView({
