@@ -96,7 +96,11 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     }
 
     // 반복 금기: 오늘 복사본이 없으면 가장 최근 반복 금기를 기반으로 생성
-    const todayTitles = new Set(all.filter(p => p.date === today).map(p => p.title))
+    const todayRecurringGroups = new Set(
+      all
+        .filter(p => p.date === today && p.is_recurring)
+        .map(p => p.recurring_group_id ?? p.id)
+    )
 
     const { data: recurringTemplates } = await supabase
       .from('prohibitions')
@@ -108,15 +112,17 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       .order('date', { ascending: false })
 
     if (recurringTemplates) {
-      // 같은 title에서 가장 최근 것만 사용
+      // 같은 recurring_group_id에서 가장 최근 것만 사용
       const seen = new Set<string>()
       for (const rec of recurringTemplates as Prohibition[]) {
-        if (seen.has(rec.title) || todayTitles.has(rec.title)) continue
-        seen.add(rec.title)
+        const recurringGroupId = rec.recurring_group_id ?? rec.id
+        if (seen.has(recurringGroupId) || todayRecurringGroups.has(recurringGroupId)) continue
+        seen.add(recurringGroupId)
         const { data: newP } = await supabase
           .from('prohibitions')
           .insert({
             user_id: userId,
+            recurring_group_id: recurringGroupId,
             title: rec.title,
             emoji: rec.emoji,
             difficulty: rec.difficulty,

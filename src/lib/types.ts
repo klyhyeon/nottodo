@@ -21,6 +21,7 @@ export interface Prohibition {
   date: string
   status: ProhibitionStatus
   is_recurring: boolean
+  recurring_group_id: string | null
   verify_deadline_hours: number
   created_at: string
   updated_at: string
