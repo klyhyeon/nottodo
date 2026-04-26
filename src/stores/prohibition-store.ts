@@ -71,7 +71,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     set({ loading: true })
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const yd = new Date(now.getTime() - 86400000)
+    const yd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     const yesterday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, '0')}-${String(yd.getDate()).padStart(2, '0')}`
 
     // 오늘 + 어제(아직 인증 마감 안 된 것) 조회
@@ -141,9 +141,9 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       }
     }
 
-    // 오늘 것 전부 + 어제 것 중 마감 안 지난 것 (상태 무관)
+    // 오늘 것 전부 + 어제 것 중 마감 안 지나고 아직 미결(active/failed)인 것만
     const visible = all.filter(p =>
-      p.date === today || (p.date === yesterday && !isDeadlinePassed(p))
+      p.date === today || (p.date === yesterday && (p.status === 'active' || p.status === 'failed') && !isDeadlinePassed(p))
     )
 
     set({ prohibitions: visible, loading: false })
