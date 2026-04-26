@@ -141,37 +141,18 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       }
     }
 
-    // 오늘 완료된 반복 금기 → 내일 복사본 생성
-    const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-    const tomorrow = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`
-
+    // 오늘 완료된 반복 금기 → 내일 복사본 DB에 미리 생성 (표시는 내일)
     const completedTodayRecurring = all.filter(
       p => p.date === today && p.is_recurring && (p.status === 'succeeded' || p.status === 'failed')
     )
 
     if (completedTodayRecurring.length > 0) {
-      // 완료된 반복 그룹의 내일 복사본: 이미 있으면 가져오고, 없으면 생성
-      const completedGroupIds = completedTodayRecurring.map(p => p.recurring_group_id ?? p.id)
+      const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      const tomorrow = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`
 
-      const { data: existingTomorrow } = await supabase
-        .from('prohibitions')
-        .select('*')
-        .eq('user_id', userId)
-        .is('deleted_at', null)
-        .eq('date', tomorrow)
-        .eq('is_recurring', true)
-        .in('recurring_group_id', completedGroupIds)
-
-      const existingTomorrowGroups = new Set(
-        (existingTomorrow ?? []).map((p: Prohibition) => p.recurring_group_id ?? p.id)
-      )
-      all.push(...((existingTomorrow ?? []) as Prohibition[]))
-
-      // 아직 없는 그룹만 생성
       for (const p of completedTodayRecurring) {
         const groupId = p.recurring_group_id ?? p.id
-        if (existingTomorrowGroups.has(groupId)) continue
-        const { data: newP } = await supabase
+        await supabase
           .from('prohibitions')
           .insert({
             user_id: userId,
@@ -186,22 +167,13 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
             is_recurring: true,
             verify_deadline_hours: p.verify_deadline_hours,
           })
-          .select()
-          .single()
-        if (newP) all.push(newP as Prohibition)
       }
     }
 
-    // 반복 금기 그룹별 표시 우선순위 결정
-    // 어제 active(미기록, 마감 전) > 오늘 active > 내일 active(오늘 완료 시) > 오늘 완료
+    // 반복 금기 그룹별: 어제 active(마감 전) 있으면 오늘 것 숨김 (중복 방지)
     const yesterdayActiveGroups = new Set(
       all
         .filter(p => p.date === yesterday && p.status === 'active' && p.is_recurring && !isDeadlinePassed(p))
-        .map(p => p.recurring_group_id ?? p.id)
-    )
-    const tomorrowGroups = new Set(
-      all
-        .filter(p => p.date === tomorrow && p.is_recurring)
         .map(p => p.recurring_group_id ?? p.id)
     )
 
@@ -209,17 +181,9 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       if (p.date === yesterday) {
         return p.status === 'active' && !isDeadlinePassed(p)
       }
-      if (p.date === tomorrow) {
-        // 내일 것: 오늘 완료된 반복 그룹만
-        return true
-      }
       if (p.date === today && p.is_recurring) {
         const groupId = p.recurring_group_id ?? p.id
-        // 어제 active가 있으면 오늘 것 숨김
-        if (yesterdayActiveGroups.has(groupId)) return false
-        // 내일 것이 있으면(오늘 완료) 오늘 것 숨김
-        if (tomorrowGroups.has(groupId)) return false
-        return true
+        return !yesterdayActiveGroups.has(groupId)
       }
       return p.date === today
     })
