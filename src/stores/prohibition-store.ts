@@ -246,14 +246,21 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
 
     if (error) throw error
 
-    // 반복 금기 완료 시 → 내일 복사본 생성 후 오늘 것 대체
+    // 상태 업데이트 (원래 금기는 유지)
+    set({
+      prohibitions: get().prohibitions.map(p =>
+        p.id === id ? { ...p, status } : p
+      ),
+    })
+
+    // 반복 금기 완료 시 → 내일 복사본 미리 생성 (fetchToday에서 표시 전환)
     if (prohibition.is_recurring && (status === 'succeeded' || status === 'failed')) {
       const now = new Date()
       const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
       const tomorrow = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`
       const groupId = prohibition.recurring_group_id ?? prohibition.id
 
-      const { data: tomorrowP } = await supabase
+      await supabase
         .from('prohibitions')
         .insert({
           user_id: prohibition.user_id,
@@ -268,26 +275,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
           is_recurring: true,
           verify_deadline_hours: prohibition.verify_deadline_hours,
         })
-        .select()
-        .single()
-
-      if (tomorrowP) {
-        // 오늘 완료 것 → 내일 것으로 교체
-        set({
-          prohibitions: get().prohibitions.map(p =>
-            p.id === id ? (tomorrowP as Prohibition) : p
-          ),
-        })
-        return
-      }
     }
-
-    // 내일 것 못 만든 경우 또는 비반복 → 상태만 업데이트
-    set({
-      prohibitions: get().prohibitions.map(p =>
-        p.id === id ? { ...p, status } : p
-      ),
-    })
   },
 
   deleteProhibition: async (id: string) => {
