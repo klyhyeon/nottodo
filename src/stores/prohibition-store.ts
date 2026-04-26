@@ -141,10 +141,25 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       }
     }
 
-    // 오늘 것 전부 + 어제 것 중 마감 안 지나고 아직 미결(active/failed)인 것만
-    const visible = all.filter(p =>
-      p.date === today || (p.date === yesterday && (p.status === 'active' || p.status === 'failed') && !isDeadlinePassed(p))
+    // 어제 것 중 마감 전 active만 (미기록 상태)
+    // 반복 금기: 어제 것이 active면 어제 것만, 기록 완료되면 오늘 것만 표시 (중복 방지)
+    const yesterdayActiveGroups = new Set(
+      all
+        .filter(p => p.date === yesterday && p.status === 'active' && p.is_recurring && !isDeadlinePassed(p))
+        .map(p => p.recurring_group_id ?? p.id)
     )
+
+    const visible = all.filter(p => {
+      if (p.date === yesterday) {
+        return p.status === 'active' && !isDeadlinePassed(p)
+      }
+      if (p.date === today && p.is_recurring) {
+        const groupId = p.recurring_group_id ?? p.id
+        // 어제 것이 아직 active면 오늘 것은 숨김
+        return !yesterdayActiveGroups.has(groupId)
+      }
+      return p.date === today
+    })
 
     set({ prohibitions: visible, loading: false })
   },
