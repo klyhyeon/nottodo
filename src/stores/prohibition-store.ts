@@ -77,6 +77,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       .from('prohibitions')
       .select('*')
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .in('date', [today, yesterday])
       .order('created_at', { ascending: true })
 
@@ -102,6 +103,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       .select('*')
       .eq('user_id', userId)
       .eq('is_recurring', true)
+      .is('deleted_at', null)
       .lt('date', today)
       .order('date', { ascending: false })
 
@@ -145,6 +147,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       .select('*')
       .eq('user_id', userId)
       .eq('title', title)
+      .is('deleted_at', null)
       .order('date', { ascending: false })
       .limit(30)
 
@@ -184,7 +187,9 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
   },
 
   deleteProhibition: async (id: string) => {
-    const { error } = await supabase.from('prohibitions').delete().eq('id', id)
+    const { error } = await supabase
+    .from('prohibitions')
+    .update(  { deleted_at: new Date().toISOString() }).eq('id', id)
     if (error) throw error
     set({ prohibitions: get().prohibitions.filter(p => p.id !== id) })
   },
