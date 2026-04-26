@@ -149,26 +149,47 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       p => p.date === today && p.is_recurring && (p.status === 'succeeded' || p.status === 'failed')
     )
 
-    for (const p of completedTodayRecurring) {
-      const groupId = p.recurring_group_id ?? p.id
-      const { data: newP } = await supabase
+    if (completedTodayRecurring.length > 0) {
+      // 완료된 반복 그룹의 내일 복사본: 이미 있으면 가져오고, 없으면 생성
+      const completedGroupIds = completedTodayRecurring.map(p => p.recurring_group_id ?? p.id)
+
+      const { data: existingTomorrow } = await supabase
         .from('prohibitions')
-        .insert({
-          user_id: userId,
-          recurring_group_id: groupId,
-          title: p.title,
-          emoji: p.emoji,
-          difficulty: p.difficulty,
-          type: p.type,
-          start_time: p.start_time,
-          end_time: p.end_time,
-          date: tomorrow,
-          is_recurring: true,
-          verify_deadline_hours: p.verify_deadline_hours,
-        })
-        .select()
-        .single()
-      if (newP) all.push(newP as Prohibition)
+        .select('*')
+        .eq('user_id', userId)
+        .is('deleted_at', null)
+        .eq('date', tomorrow)
+        .eq('is_recurring', true)
+        .in('recurring_group_id', completedGroupIds)
+
+      const existingTomorrowGroups = new Set(
+        (existingTomorrow ?? []).map((p: Prohibition) => p.recurring_group_id ?? p.id)
+      )
+      all.push(...((existingTomorrow ?? []) as Prohibition[]))
+
+      // 아직 없는 그룹만 생성
+      for (const p of completedTodayRecurring) {
+        const groupId = p.recurring_group_id ?? p.id
+        if (existingTomorrowGroups.has(groupId)) continue
+        const { data: newP } = await supabase
+          .from('prohibitions')
+          .insert({
+            user_id: userId,
+            recurring_group_id: groupId,
+            title: p.title,
+            emoji: p.emoji,
+            difficulty: p.difficulty,
+            type: p.type,
+            start_time: p.start_time,
+            end_time: p.end_time,
+            date: tomorrow,
+            is_recurring: true,
+            verify_deadline_hours: p.verify_deadline_hours,
+          })
+          .select()
+          .single()
+        if (newP) all.push(newP as Prohibition)
+      }
     }
 
     // 반복 금기 그룹별 표시 우선순위 결정
