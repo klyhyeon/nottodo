@@ -89,7 +89,7 @@ export default function ProhibitionNewPage() {
   }
 
   return (
-    <div className="p-5">
+    <div className="p-5 pb-32">
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => navigate(-1)} className="text-lg">← 뒤로</button>
         <h1 className="text-lg font-black font-serif text-primary">{editTarget ? '금기 수정' : '금기 추가'}</h1>
