@@ -69,8 +69,10 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
 
   fetchToday: async (userId: string) => {
     set({ loading: true })
-    const today = new Date().toISOString().split('T')[0]
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const yd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    const yesterday = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, '0')}-${String(yd.getDate()).padStart(2, '0')}`
 
     // 오늘 + 어제(아직 인증 마감 안 된 것) 조회
     const { data, error } = await supabase
@@ -139,10 +141,52 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       }
     }
 
-    // 어제 것 중 마감 안 지난 active만 표시 + 오늘 것 전부
-    const visible = all.filter(p =>
-      p.date === today || (p.date === yesterday && p.status === 'active' && !isDeadlinePassed(p))
+    // 오늘 완료된 반복 금기 → 내일 복사본 DB에 미리 생성 (표시는 내일)
+    const completedTodayRecurring = all.filter(
+      p => p.date === today && p.is_recurring && (p.status === 'succeeded' || p.status === 'failed')
     )
+
+    if (completedTodayRecurring.length > 0) {
+      const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      const tomorrow = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`
+
+      for (const p of completedTodayRecurring) {
+        const groupId = p.recurring_group_id ?? p.id
+        await supabase
+          .from('prohibitions')
+          .insert({
+            user_id: userId,
+            recurring_group_id: groupId,
+            title: p.title,
+            emoji: p.emoji,
+            difficulty: p.difficulty,
+            type: p.type,
+            start_time: p.start_time,
+            end_time: p.end_time,
+            date: tomorrow,
+            is_recurring: true,
+            verify_deadline_hours: p.verify_deadline_hours,
+          })
+      }
+    }
+
+    // 반복 금기 그룹별: 어제 active(마감 전) 있으면 오늘 것 숨김 (중복 방지)
+    const yesterdayActiveGroups = new Set(
+      all
+        .filter(p => p.date === yesterday && p.status === 'active' && p.is_recurring && !isDeadlinePassed(p))
+        .map(p => p.recurring_group_id ?? p.id)
+    )
+
+    const visible = all.filter(p => {
+      if (p.date === yesterday) {
+        return p.status === 'active' && !isDeadlinePassed(p)
+      }
+      if (p.date === today && p.is_recurring) {
+        const groupId = p.recurring_group_id ?? p.id
+        return !yesterdayActiveGroups.has(groupId)
+      }
+      return p.date === today
+    })
 
     set({ prohibitions: visible, loading: false })
   },
@@ -162,7 +206,8 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
   },
 
   create: async (userId: string, input: CreateProhibitionInput) => {
-    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const { data, error } = await supabase
       .from('prohibitions')
       .insert({ ...input, user_id: userId, date: today })
@@ -185,18 +230,73 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     })
 
     if (error) throw error
+
+    // 상태 업데이트 (원래 금기는 유지)
     set({
       prohibitions: get().prohibitions.map(p =>
         p.id === id ? { ...p, status } : p
       ),
     })
+
+    // 반복 금기 완료 시 → 내일 복사본 미리 생성 (fetchToday에서 표시 전환)
+    if (prohibition.is_recurring && (status === 'succeeded' || status === 'failed')) {
+      const now = new Date()
+      const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      const tomorrow = `${tmrw.getFullYear()}-${String(tmrw.getMonth() + 1).padStart(2, '0')}-${String(tmrw.getDate()).padStart(2, '0')}`
+      const groupId = prohibition.recurring_group_id ?? prohibition.id
+
+      await supabase
+        .from('prohibitions')
+        .insert({
+          user_id: prohibition.user_id,
+          recurring_group_id: groupId,
+          title: prohibition.title,
+          emoji: prohibition.emoji,
+          difficulty: prohibition.difficulty,
+          type: prohibition.type,
+          start_time: prohibition.start_time,
+          end_time: prohibition.end_time,
+          date: tomorrow,
+          is_recurring: true,
+          verify_deadline_hours: prohibition.verify_deadline_hours,
+        })
+    }
   },
 
   deleteProhibition: async (id: string) => {
-    const { error } = await supabase
-    .from('prohibitions')
-    .update(  { deleted_at: new Date().toISOString() }).eq('id', id)
-    if (error) throw error
-    set({ prohibitions: get().prohibitions.filter(p => p.id !== id) })
+    // store에 없을 수 있으므로 DB에서 직접 조회
+    let prohibition = get().prohibitions.find(p => p.id === id)
+    if (!prohibition) {
+      const { data } = await supabase
+        .from('prohibitions')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (data) prohibition = data as Prohibition
+    }
+
+    if (prohibition?.is_recurring && prohibition.recurring_group_id) {
+      await supabase
+        .from('prohibitions')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('recurring_group_id', prohibition.recurring_group_id)
+      // const { error } = await supabase.rpc('delete_recurring_group', {
+        // group_id: prohibition.recurring_group_id,
+      // })
+      // if (error) throw error
+      set({
+        prohibitions: get().prohibitions.filter(
+          // p => p.recurring_group_id !== prohibition!.recurring_group_id
+          p => p.deleted_at == null
+        ),
+      })
+    } else {
+      const { error } = await supabase
+        .from('prohibitions')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+      set({ prohibitions: get().prohibitions.filter(p => p.id !== id) })
+    }
   },
 }))

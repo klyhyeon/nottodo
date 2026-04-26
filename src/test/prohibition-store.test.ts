@@ -30,7 +30,7 @@ describe('calculateStreak', () => {
     id: '1', user_id: '1', title: 'test', emoji: '🍕', difficulty: 1,
     type: 'all_day', start_time: null, end_time: null,
     date, status, is_recurring: false, recurring_group_id: null, verify_deadline_hours: 2,
-    created_at: '', updated_at: '',
+    created_at: '', updated_at: '', deleted_at: null,
   })
 
   it('returns 0 for empty list', () => {
