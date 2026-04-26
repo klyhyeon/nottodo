@@ -264,7 +264,16 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
   },
 
   deleteProhibition: async (id: string) => {
-    const prohibition = get().prohibitions.find(p => p.id === id)
+    // store에 없을 수 있으므로 DB에서 직접 조회
+    let prohibition = get().prohibitions.find(p => p.id === id)
+    if (!prohibition) {
+      const { data } = await supabase
+        .from('prohibitions')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (data) prohibition = data as Prohibition
+    }
 
     if (prohibition?.is_recurring && prohibition.recurring_group_id) {
       // 반복 금기: RPC로 같은 그룹 전체 soft delete (RLS 우회)
@@ -274,7 +283,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       if (error) throw error
       set({
         prohibitions: get().prohibitions.filter(
-          p => p.recurring_group_id !== prohibition.recurring_group_id
+          p => p.recurring_group_id !== prohibition!.recurring_group_id
         ),
       })
     } else {

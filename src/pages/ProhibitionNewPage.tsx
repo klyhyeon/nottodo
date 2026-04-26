@@ -84,7 +84,11 @@ export default function ProhibitionNewPage() {
   const handleDelete = async () => {
     if (!editTarget) return
     if (!window.confirm('이 금기를 삭제할까요?')) return
-    await deleteProhibition(editTarget.id)
+    try {
+      await deleteProhibition(editTarget.id)
+    } catch (e) {
+      console.error('삭제 실패:', e)
+    }
     navigate('/')
   }
 
