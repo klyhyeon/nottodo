@@ -8,8 +8,8 @@ export default function FailedPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
-  const { prohibitions, fetchHistory } = useProhibitionStore()
-  const prohibition = prohibitions.find(p => p.id === id)
+  const { items, fetchHistory } = useProhibitionStore()
+  const item = items.find(p => p.id === id)
 
   const [content, setContent] = useState('')
   const [posting, setPosting] = useState(false)
@@ -17,8 +17,8 @@ export default function FailedPage() {
   const [stats, setStats] = useState({ total: 0, succeeded: 0, failed: 0 })
 
   useEffect(() => {
-    if (user && prohibition) {
-      fetchHistory(user.id, prohibition.title).then(data => {
+    if (user && item) {
+      fetchHistory(user.id, item.templateId ?? item.title).then(data => {
         setStats({
           total: data.length,
           succeeded: data.filter(p => p.status === 'succeeded').length,
@@ -29,15 +29,15 @@ export default function FailedPage() {
         .from('confessions')
         .select('id')
         .eq('user_id', user.id)
-        .eq('prohibition_id', prohibition.id)
+        .eq('prohibition_id', item.id)
         .limit(1)
         .then(({ data }) => {
           if (data && data.length > 0) setAlreadyConfessed(true)
         })
     }
-  }, [user, prohibition, fetchHistory])
+  }, [user, item, fetchHistory])
 
-  if (!prohibition) {
+  if (!item) {
     return <div className="p-5 text-center text-gray-400">금기를 찾을 수 없어요</div>
   }
 
@@ -48,9 +48,9 @@ export default function FailedPage() {
     setPosting(true)
     const { error } = await supabase.from('confessions').insert({
       user_id: user.id,
-      prohibition_id: prohibition.id,
+      prohibition_id: item.id,
       content: content.trim(),
-      category: prohibition.emoji,
+      category: item.emoji,
     })
     if (!error) navigate('/')
     else setPosting(false)
@@ -65,7 +65,7 @@ export default function FailedPage() {
       {/* Fail Header */}
       <div className="text-center mb-6">
         <div className="w-[72px] h-[72px] rounded-full bg-cream-orange flex items-center justify-center text-4xl mx-auto mb-3">😵</div>
-        <h1 className="text-xl font-black font-serif text-accent">{prohibition.title}</h1>
+        <h1 className="text-xl font-black font-serif text-accent">{item.title}</h1>
         <div className="inline-block mt-2 px-3 py-1 bg-fail rounded-xl text-xs text-accent font-semibold">실패</div>
       </div>
 

@@ -12,8 +12,8 @@ export default function ProhibitionNewPage() {
   const [searchParams] = useSearchParams()
   const editId = searchParams.get('edit')
   const user = useAuthStore(s => s.user)
-  const { create, prohibitions, deleteProhibition } = useProhibitionStore()
-  const editTarget = editId ? prohibitions.find(p => p.id === editId) : null
+  const { create, items, deleteProhibition, fetchToday } = useProhibitionStore()
+  const editTarget = editId ? items.find(p => p.id === editId) : null
 
   const [title, setTitle] = useState('')
   const [emoji, setEmoji] = useState('🚫')
@@ -50,19 +50,22 @@ export default function ProhibitionNewPage() {
           type,
           start_time: type === 'timed' ? startTime : null,
           end_time: type === 'timed' ? endTime : null,
-          is_recurring: isRecurring,
           verify_deadline_hours: verifyDeadlineHours,
         }
-        const { error } = await supabase
-          .from('prohibitions')
-          .update(updates)
-          .eq('id', editTarget.id)
-        if (error) throw error
-        useProhibitionStore.setState(s => ({
-          prohibitions: s.prohibitions.map(p =>
-            p.id === editTarget.id ? { ...p, ...updates } : p
-          ),
-        }))
+        if (editTarget.templateId) {
+          const { error } = await supabase
+            .from('prohibition_templates')
+            .update(updates)
+            .eq('id', editTarget.templateId)
+          if (error) throw error
+        } else {
+          const { error } = await supabase
+            .from('prohibitions')
+            .update(updates)
+            .eq('id', editTarget.id)
+          if (error) throw error
+        }
+        if (user) await fetchToday(user.id)
       } else {
         await create(user.id, {
           title: title.trim(),
@@ -85,7 +88,7 @@ export default function ProhibitionNewPage() {
     if (!editTarget) return
     if (!window.confirm('이 금기를 삭제할까요?')) return
     try {
-      await deleteProhibition(editTarget.id)
+      await deleteProhibition(editTarget)
     } catch (e) {
       console.error('삭제 실패:', e)
     }
@@ -216,17 +219,28 @@ export default function ProhibitionNewPage() {
       </div>
 
       {/* Recurring */}
-      <label className="flex items-center gap-3 mb-8 cursor-pointer">
-        <div
-          onClick={() => setIsRecurring(!isRecurring)}
-          className={`w-6 h-6 rounded-lg border-[1.5px] flex items-center justify-center text-xs ${
-            isRecurring ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'
-          }`}
-        >
-          {isRecurring && '✓'}
+      {editTarget ? (
+        <div className="flex items-center gap-3 mb-8">
+          <div className={`w-6 h-6 rounded-lg border-[1.5px] flex items-center justify-center text-xs ${
+            editTarget.is_recurring ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'
+          }`}>
+            {editTarget.is_recurring && '✓'}
+          </div>
+          <span className="text-sm text-gray-400">매일 반복 {editTarget.is_recurring ? '(반복 중)' : '(일회성)'}</span>
         </div>
-        <span className="text-sm text-primary">매일 반복</span>
-      </label>
+      ) : (
+        <label className="flex items-center gap-3 mb-8 cursor-pointer">
+          <div
+            onClick={() => setIsRecurring(!isRecurring)}
+            className={`w-6 h-6 rounded-lg border-[1.5px] flex items-center justify-center text-xs ${
+              isRecurring ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'
+            }`}
+          >
+            {isRecurring && '✓'}
+          </div>
+          <span className="text-sm text-primary">매일 반복</span>
+        </label>
+      )}
 
       {/* Submit */}
       <button

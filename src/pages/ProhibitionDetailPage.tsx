@@ -10,15 +10,15 @@ export default function ProhibitionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
-  const { prohibitions, updateStatus, fetchHistory } = useProhibitionStore()
-  const prohibition = prohibitions.find(p => p.id === id)
+  const { items, updateStatus, fetchHistory } = useProhibitionStore()
+  const item = items.find(p => p.id === id)
 
   const [history, setHistory] = useState<Prohibition[]>([])
   const [maxStreak, setMaxStreak] = useState(0)
 
   useEffect(() => {
-    if (user && prohibition) {
-      fetchHistory(user.id, prohibition.title).then(data => {
+    if (user && item) {
+      fetchHistory(user.id, item.templateId ?? item.title).then(data => {
         setHistory(data)
         let max = 0
         let current = 0
@@ -29,22 +29,22 @@ export default function ProhibitionDetailPage() {
         setMaxStreak(max)
       })
     }
-  }, [user, prohibition, fetchHistory])
+  }, [user, item, fetchHistory])
 
-  if (!prohibition) {
+  if (!item) {
     return <div className="p-5 text-center text-gray-400">금기를 찾을 수 없어요</div>
   }
 
   const streak = calculateStreak(history)
 
   const handleSuccess = async () => {
-    await updateStatus(prohibition.id, 'succeeded')
+    await updateStatus(item, 'succeeded')
     navigate('/')
   }
 
   const handleFail = async () => {
-    await updateStatus(prohibition.id, 'failed')
-    navigate(`/prohibition/${prohibition.id}/failed`)
+    await updateStatus(item, 'failed')
+    navigate(`/prohibition/${item.id}/failed`)
   }
 
   const [timerDone, setTimerDone] = useState(false)
@@ -57,22 +57,22 @@ export default function ProhibitionDetailPage() {
     <div className="p-5">
       <div className="flex justify-between items-center mb-5">
         <button onClick={() => navigate(-1)} className="text-lg">← 뒤로</button>
-        <button onClick={() => navigate(`/prohibition/new?edit=${prohibition.id}`)} className="text-sm text-gray-400">수정</button>
+        <button onClick={() => navigate(`/prohibition/new?edit=${item.id}`)} className="text-sm text-gray-400">수정</button>
       </div>
 
       {/* Header */}
       <div className="text-center mb-6">
         <div className="w-[72px] h-[72px] rounded-full bg-cream border-[2.5px] border-dashed border-gray-300 flex items-center justify-center text-3xl font-black text-primary mx-auto mb-3">
-          {prohibition.status === 'failed' ? '😵' : '✕'}
+          {item.status === 'failed' ? '😵' : '✕'}
         </div>
-        <h1 className="text-xl font-black font-serif text-primary">{prohibition.title}</h1>
+        <h1 className="text-xl font-black font-serif text-primary">{item.title}</h1>
         <div className="text-sm text-gray-400 mt-1">
-          {prohibition.emoji} Lv.{prohibition.difficulty} · {prohibition.type === 'timed' ? '시간 지정' : '하루종일'}
+          {item.emoji} Lv.{item.difficulty} · {item.type === 'timed' ? '시간 지정' : '하루종일'}
         </div>
       </div>
 
       {/* Timer (timed type) */}
-      {prohibition.type === 'timed' && prohibition.status === 'active' && prohibition.end_time && (
+      {item.type === 'timed' && item.status === 'active' && item.end_time && (
         <div className={`p-6 bg-white rounded-2xl border-[1.5px] ${timerDone ? 'border-gray-200' : 'border-success'} text-center mb-3`}>
           {timerDone ? (
             <>
@@ -82,9 +82,9 @@ export default function ProhibitionDetailPage() {
           ) : (
             <>
               <div className="text-xs text-success-text font-semibold mb-2">🟢 금기 시간 진행중</div>
-              <CountdownTimer endTime={prohibition.end_time} onComplete={handleTimerComplete} />
+              <CountdownTimer endTime={item.end_time} onComplete={handleTimerComplete} />
               <div className="text-xs text-gray-400 mt-2">
-                {prohibition.start_time?.slice(0, 5)} ~ {prohibition.end_time?.slice(0, 5)}
+                {item.start_time?.slice(0, 5)} ~ {item.end_time?.slice(0, 5)}
               </div>
             </>
           )}
@@ -104,7 +104,7 @@ export default function ProhibitionDetailPage() {
       </div>
 
       {/* Actions */}
-      {prohibition.status === 'active' && (
+      {item.status === 'active' && (
         <div className="flex gap-2.5">
           <button onClick={handleSuccess} className="flex-1 py-3.5 bg-primary rounded-full text-white font-bold text-sm">
             오늘 성공! ✨
@@ -115,10 +115,10 @@ export default function ProhibitionDetailPage() {
         </div>
       )}
 
-      {prohibition.status === 'active' && (
+      {item.status === 'active' && (
         <div className="text-center mt-2 text-xs text-gray-300">
           {(() => {
-            const deadline = getVerifyDeadline(prohibition)
+            const deadline = getVerifyDeadline(item)
             const h = deadline.getHours()
             const m = deadline.getMinutes()
             const dateStr = deadline.getDate() !== new Date().getDate() ? '내일 ' : ''

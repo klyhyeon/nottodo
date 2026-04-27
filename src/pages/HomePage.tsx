@@ -7,7 +7,7 @@ import StreakBadge from '../components/StreakBadge'
 
 export default function HomePage() {
   const user = useAuthStore(s => s.user)
-  const { prohibitions, loading, fetchToday } = useProhibitionStore()
+  const { items, loading, fetchToday } = useProhibitionStore()
 
   useEffect(() => {
     if (!user) return
@@ -19,7 +19,7 @@ export default function HomePage() {
   const today = new Date()
   const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일 ${['일', '월', '화', '수', '목', '금', '토'][today.getDay()]}요일`
 
-  const succeededCount = prohibitions.filter(p => p.status === 'succeeded').length
+  const succeededCount = items.filter(p => p.status === 'succeeded').length
 
   return (
     <div className="p-5">
@@ -37,7 +37,7 @@ export default function HomePage() {
 
       {loading ? (
         <div className="text-center text-gray-400 py-12">불러오는 중...</div>
-      ) : prohibitions.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="text-center text-gray-400 py-12">
           <div className="text-4xl mb-3">✕</div>
           <div className="text-sm">아직 금기가 없어요</div>
@@ -45,7 +45,7 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {prohibitions.map(p => (
+          {items.map(p => (
             <ProhibitionCard key={p.id} prohibition={p} />
           ))}
         </div>
