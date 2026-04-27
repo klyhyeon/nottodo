@@ -9,9 +9,25 @@ export interface User {
   created_at: string
 }
 
+export interface ProhibitionTemplate {
+  id: string
+  user_id: string
+  title: string
+  emoji: string
+  difficulty: number
+  type: ProhibitionType
+  start_time: string | null
+  end_time: string | null
+  verify_deadline_hours: number
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Prohibition {
   id: string
   user_id: string
+  template_id: string | null
   title: string
   emoji: string
   difficulty: number
@@ -26,6 +42,22 @@ export interface Prohibition {
   created_at: string
   updated_at: string
   deleted_at: string | null
+}
+
+/** Unified item for the home list — either a template (active) or an instance */
+export interface ProhibitionListItem {
+  id: string               // template.id for recurring-active, prohibition.id for recorded
+  templateId: string | null // template.id if recurring
+  title: string
+  emoji: string
+  difficulty: number
+  type: ProhibitionType
+  start_time: string | null
+  end_time: string | null
+  date: string
+  status: ProhibitionStatus
+  verify_deadline_hours: number
+  is_recurring: boolean
 }
 
 export interface Confession {
