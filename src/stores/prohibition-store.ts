@@ -46,18 +46,28 @@ export function calculateStreak(prohibitions: Prohibition[]): number {
   return streak
 }
 
+/**
+ * Pure merge: combines templates + instances into a flat list for display.
+ * Rules:
+ * - Template with no today-instance → status "active"
+ * - Template with today-instance → show instance status
+ * - If yesterday's instance is still active (deadline not passed) → show that instead
+ * - One-off prohibitions (template_id = null) → show as-is
+ * - One item per template, always
+ */
 export function mergeTemplatesAndInstances(
   templates: ProhibitionTemplate[],
   instances: Prohibition[],
   oneOffs: Prohibition[],
   today: string,
+  yesterday: string,
 ): ProhibitionListItem[] {
   const items: ProhibitionListItem[] = []
 
   for (const tmpl of templates) {
     const todayInst = instances.find(i => i.template_id === tmpl.id && i.date === today)
     const yesterdayInst = instances.find(
-      i => i.template_id === tmpl.id && i.date !== today && i.status === 'active' && !isDeadlinePassed(i)
+      i => i.template_id === tmpl.id && i.date === yesterday && i.status === 'active' && !isDeadlinePassed(i)
     )
 
     if (yesterdayInst) {
@@ -147,7 +157,7 @@ interface ProhibitionState {
   fetchToday: (userId: string) => Promise<void>
   fetchHistory: (userId: string, templateIdOrTitle: string) => Promise<Prohibition[]>
   create: (userId: string, input: CreateProhibitionInput) => Promise<void>
-  updateStatus: (item: ProhibitionListItem, status: ProhibitionStatus) => Promise<void>
+  updateStatus: (userId: string, item: ProhibitionListItem, status: ProhibitionStatus) => Promise<string>
   deleteProhibition: (item: ProhibitionListItem) => Promise<void>
 }
 
@@ -184,19 +194,16 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
       .eq('date', today)
       .order('created_at', { ascending: true })
 
-    // Mark expired active instances as unverified
-    const allInstances = [...(instances ?? []), ...(oneOffs ?? [])] as Prohibition[]
-    const expired = allInstances.filter(p => p.status === 'active' && isDeadlinePassed(p))
-    for (const p of expired) {
-      await supabase.from('prohibitions').update({ status: 'unverified' }).eq('id', p.id)
-      p.status = 'unverified'
-    }
+    // Expired active marking is handled by the cron job (mark-unverified).
+    // Client-side marking would silently fail for rows older than yesterday
+    // due to the RLS UPDATE policy (date >= CURRENT_DATE - 1 day).
 
     const items = mergeTemplatesAndInstances(
       (templates ?? []) as ProhibitionTemplate[],
       (instances ?? []) as Prohibition[],
       (oneOffs ?? []) as Prohibition[],
       today,
+      yesterday,
     )
 
     set({ items, loading: false })
@@ -261,10 +268,12 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
     await get().fetchToday(userId)
   },
 
-  updateStatus: async (item: ProhibitionListItem, status: ProhibitionStatus) => {
+  updateStatus: async (userId: string, item: ProhibitionListItem, status: ProhibitionStatus): Promise<string> => {
     if (!isValidTransition(item.status, status)) {
       throw new Error(`Invalid transition: ${item.status} → ${status}`)
     }
+
+    let resolvedId = item.id
 
     if (item.templateId && item.templateId === item.id) {
       // Template shown as "active" (no instance yet) — create the instance
@@ -273,7 +282,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
         .from('prohibitions')
         .insert({
           template_id: item.templateId,
-          user_id: (await supabase.auth.getUser()).data.user!.id,
+          user_id: userId,
           title: item.title,
           emoji: item.emoji,
           difficulty: item.difficulty,
@@ -288,12 +297,7 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
         .select()
         .single()
       if (error) throw error
-
-      set({
-        items: get().items.map(i =>
-          i.id === item.id ? { ...i, id: data.id, status } : i
-        ),
-      })
+      resolvedId = data.id
     } else {
       // Existing instance — use RPC for safe transition
       const { error } = await supabase.rpc('update_prohibition_status', {
@@ -301,22 +305,30 @@ export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
         new_status: status,
       })
       if (error) throw error
-
-      set({
-        items: get().items.map(i =>
-          i.id === item.id ? { ...i, status } : i
-        ),
-      })
     }
+
+    // Refresh from DB to avoid race with fetchToday interval
+    await get().fetchToday(userId)
+
+    return resolvedId
   },
 
   deleteProhibition: async (item: ProhibitionListItem) => {
     if (item.templateId) {
+      // Deactivate template
       const { error } = await supabase
         .from('prohibition_templates')
         .update({ active: false })
         .eq('id', item.templateId)
       if (error) throw error
+
+      // Also soft-delete today's instance if it exists
+      if (item.id !== item.templateId) {
+        await supabase
+          .from('prohibitions')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', item.id)
+      }
     } else {
       const { error } = await supabase
         .from('prohibitions')

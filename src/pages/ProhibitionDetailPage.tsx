@@ -38,13 +38,15 @@ export default function ProhibitionDetailPage() {
   const streak = calculateStreak(history)
 
   const handleSuccess = async () => {
-    await updateStatus(item, 'succeeded')
+    if (!user) return
+    await updateStatus(user.id, item, 'succeeded')
     navigate('/')
   }
 
   const handleFail = async () => {
-    await updateStatus(item, 'failed')
-    navigate(`/prohibition/${item.id}/failed`)
+    if (!user) return
+    const resolvedId = await updateStatus(user.id, item, 'failed')
+    navigate(`/prohibition/${resolvedId}/failed`)
   }
 
   const [timerDone, setTimerDone] = useState(false)

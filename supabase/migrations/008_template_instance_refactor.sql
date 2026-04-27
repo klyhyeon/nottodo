@@ -55,7 +55,7 @@ SELECT DISTINCT ON (recurring_group_id)
   start_time,
   end_time,
   verify_deadline_hours,
-  (deleted_at IS NULL),  -- if all in group are deleted, template is inactive
+  true,  -- always insert as active; corrective UPDATE below handles deactivation
   MIN(created_at) OVER (PARTITION BY recurring_group_id)
 FROM prohibitions
 WHERE is_recurring = true

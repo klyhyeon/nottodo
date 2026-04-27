@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   isValidTransition,
   calculateStreak,
@@ -60,6 +60,7 @@ describe('calculateStreak', () => {
 
 describe('mergeTemplatesAndInstances', () => {
   const today = '2026-04-27'
+  const yesterday = '2026-04-26'
 
   const makeTemplate = (overrides: Partial<ProhibitionTemplate> = {}): ProhibitionTemplate => ({
     id: 'tmpl-1',
@@ -99,7 +100,7 @@ describe('mergeTemplatesAndInstances', () => {
   })
 
   it('shows template as active when no today-instance exists', () => {
-    const result = mergeTemplatesAndInstances([makeTemplate()], [], [], today)
+    const result = mergeTemplatesAndInstances([makeTemplate()], [], [], today, yesterday)
     expect(result).toHaveLength(1)
     expect(result[0].status).toBe('active')
     expect(result[0].templateId).toBe('tmpl-1')
@@ -112,6 +113,7 @@ describe('mergeTemplatesAndInstances', () => {
       [makeInstance({ status: 'succeeded' })],
       [],
       today,
+      yesterday,
     )
     expect(result).toHaveLength(1)
     expect(result[0].status).toBe('succeeded')
@@ -124,6 +126,7 @@ describe('mergeTemplatesAndInstances', () => {
       [makeInstance({ status: 'failed' })],
       [],
       today,
+      yesterday,
     )
     expect(result).toHaveLength(1)
     expect(result[0].status).toBe('failed')
@@ -134,7 +137,7 @@ describe('mergeTemplatesAndInstances', () => {
       id: 'oneoff-1', template_id: null, title: '커피 안 마시기',
       is_recurring: false, recurring_group_id: null,
     })
-    const result = mergeTemplatesAndInstances([makeTemplate()], [], [oneOff], today)
+    const result = mergeTemplatesAndInstances([makeTemplate()], [], [oneOff], today, yesterday)
     expect(result).toHaveLength(2)
     expect(result.find(r => r.title === '커피 안 마시기')).toBeTruthy()
     expect(result.find(r => r.title === '늦게 자지 않기')?.status).toBe('active')
@@ -146,7 +149,34 @@ describe('mergeTemplatesAndInstances', () => {
       [makeInstance()],
       [],
       today,
+      yesterday,
     )
     expect(result).toHaveLength(2)
+  })
+
+  it('prefers yesterday active instance over today template when deadline not passed', () => {
+    // Mock time to 2026-04-27 08:00 — yesterday's all_day deadline with 12h buffer = 2026-04-27 12:00, not yet passed
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 3, 27, 8, 0))
+
+    const yesterdayInstance = makeInstance({
+      id: 'inst-yesterday',
+      date: yesterday,
+      status: 'active',
+      verify_deadline_hours: 12,
+    })
+    const result = mergeTemplatesAndInstances(
+      [makeTemplate({ verify_deadline_hours: 12 })],
+      [yesterdayInstance],
+      [],
+      today,
+      yesterday,
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('inst-yesterday')
+    expect(result[0].date).toBe(yesterday)
+    expect(result[0].status).toBe('active')
+
+    vi.useRealTimers()
   })
 })
