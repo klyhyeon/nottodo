@@ -1,46 +1,144 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
-import type { Prohibition, ProhibitionStatus, ProhibitionType } from '../lib/types'
+import { getLocalToday, getLocalYesterday } from '../lib/date-utils'
+import type {
+  Prohibition,
+  ProhibitionTemplate,
+  ProhibitionListItem,
+  ProhibitionStatus,
+  ProhibitionType,
+} from '../lib/types'
+
+// -- Pure functions (exported for testing) --
 
 export function isValidTransition(from: ProhibitionStatus, to: ProhibitionStatus): boolean {
   return from === 'active' && (to === 'succeeded' || to === 'failed')
 }
 
-export function getVerifyDeadline(prohibition: Prohibition): Date {
-  const date = new Date(prohibition.date + 'T00:00:00')
-  if (prohibition.type === 'timed' && prohibition.end_time) {
-    const [h, m] = prohibition.end_time.split(':').map(Number)
+export function getVerifyDeadline(p: { date: string; type: ProhibitionType; end_time: string | null; start_time: string | null; verify_deadline_hours: number }): Date {
+  const date = new Date(p.date + 'T00:00:00')
+  if (p.type === 'timed' && p.end_time) {
+    const [h, m] = p.end_time.split(':').map(Number)
     date.setHours(h, m, 0, 0)
-    // end_time이 start_time보다 작으면 자정을 넘긴 것 → 다음 날
-    if (prohibition.start_time) {
-      const [sh] = prohibition.start_time.split(':').map(Number)
+    if (p.start_time) {
+      const [sh] = p.start_time.split(':').map(Number)
       if (h < sh) date.setDate(date.getDate() + 1)
     }
   } else {
-    // all_day: 자정이 기준
     date.setDate(date.getDate() + 1)
     date.setHours(0, 0, 0, 0)
   }
-  date.setHours(date.getHours() + (prohibition.verify_deadline_hours ?? 0))
+  date.setHours(date.getHours() + (p.verify_deadline_hours ?? 0))
   return date
 }
 
-export function isDeadlinePassed(prohibition: Prohibition): boolean {
-  return new Date() > getVerifyDeadline(prohibition)
+export function isDeadlinePassed(p: { date: string; type: ProhibitionType; end_time: string | null; start_time: string | null; verify_deadline_hours: number }): boolean {
+  return new Date() > getVerifyDeadline(p)
 }
 
 export function calculateStreak(prohibitions: Prohibition[]): number {
   const sorted = [...prohibitions].sort((a, b) => b.date.localeCompare(a.date))
   let streak = 0
   for (const p of sorted) {
-    if (p.status === 'succeeded') {
-      streak++
-    } else {
-      break
-    }
+    if (p.status === 'succeeded') streak++
+    else break
   }
   return streak
 }
+
+/**
+ * Pure merge: combines templates + instances into a flat list for display.
+ * Rules:
+ * - Template with no today-instance → status "active"
+ * - Template with today-instance → show instance status
+ * - If yesterday's instance is still active (deadline not passed) → show that instead
+ * - One-off prohibitions (template_id = null) → show as-is
+ * - One item per template, always
+ */
+export function mergeTemplatesAndInstances(
+  templates: ProhibitionTemplate[],
+  instances: Prohibition[],
+  oneOffs: Prohibition[],
+  today: string,
+  yesterday: string,
+): ProhibitionListItem[] {
+  const items: ProhibitionListItem[] = []
+
+  for (const tmpl of templates) {
+    const todayInst = instances.find(i => i.template_id === tmpl.id && i.date === today)
+    const yesterdayInst = instances.find(
+      i => i.template_id === tmpl.id && i.date === yesterday && i.status === 'active' && !isDeadlinePassed(i)
+    )
+
+    if (yesterdayInst) {
+      items.push({
+        id: yesterdayInst.id,
+        templateId: tmpl.id,
+        title: tmpl.title,
+        emoji: tmpl.emoji,
+        difficulty: tmpl.difficulty,
+        type: tmpl.type,
+        start_time: tmpl.start_time,
+        end_time: tmpl.end_time,
+        date: yesterdayInst.date,
+        status: 'active',
+        verify_deadline_hours: tmpl.verify_deadline_hours,
+        is_recurring: true,
+      })
+    } else if (todayInst) {
+      items.push({
+        id: todayInst.id,
+        templateId: tmpl.id,
+        title: tmpl.title,
+        emoji: tmpl.emoji,
+        difficulty: tmpl.difficulty,
+        type: tmpl.type,
+        start_time: tmpl.start_time,
+        end_time: tmpl.end_time,
+        date: todayInst.date,
+        status: todayInst.status,
+        verify_deadline_hours: tmpl.verify_deadline_hours,
+        is_recurring: true,
+      })
+    } else {
+      items.push({
+        id: tmpl.id,
+        templateId: tmpl.id,
+        title: tmpl.title,
+        emoji: tmpl.emoji,
+        difficulty: tmpl.difficulty,
+        type: tmpl.type,
+        start_time: tmpl.start_time,
+        end_time: tmpl.end_time,
+        date: today,
+        status: 'active',
+        verify_deadline_hours: tmpl.verify_deadline_hours,
+        is_recurring: true,
+      })
+    }
+  }
+
+  for (const p of oneOffs) {
+    items.push({
+      id: p.id,
+      templateId: null,
+      title: p.title,
+      emoji: p.emoji,
+      difficulty: p.difficulty,
+      type: p.type,
+      start_time: p.start_time,
+      end_time: p.end_time,
+      date: p.date,
+      status: p.status,
+      verify_deadline_hours: p.verify_deadline_hours,
+      is_recurring: false,
+    })
+  }
+
+  return items
+}
+
+// -- Store --
 
 interface CreateProhibitionInput {
   title: string
@@ -54,149 +152,191 @@ interface CreateProhibitionInput {
 }
 
 interface ProhibitionState {
-  prohibitions: Prohibition[]
+  items: ProhibitionListItem[]
   loading: boolean
   fetchToday: (userId: string) => Promise<void>
-  fetchHistory: (userId: string, title: string) => Promise<Prohibition[]>
+  fetchHistory: (userId: string, templateIdOrTitle: string) => Promise<Prohibition[]>
   create: (userId: string, input: CreateProhibitionInput) => Promise<void>
-  updateStatus: (id: string, status: ProhibitionStatus) => Promise<void>
-  deleteProhibition: (id: string) => Promise<void>
+  updateStatus: (userId: string, item: ProhibitionListItem, status: ProhibitionStatus) => Promise<string>
+  deleteProhibition: (item: ProhibitionListItem) => Promise<void>
 }
 
 export const useProhibitionStore = create<ProhibitionState>((set, get) => ({
-  prohibitions: [],
+  items: [],
   loading: false,
 
   fetchToday: async (userId: string) => {
     set({ loading: true })
-    const today = new Date().toISOString().split('T')[0]
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    const today = getLocalToday()
+    const yesterday = getLocalYesterday()
 
-    // 오늘 + 어제(아직 인증 마감 안 된 것) 조회
-    const { data, error } = await supabase
-      .from('prohibitions')
+    const { data: templates } = await supabase
+      .from('prohibition_templates')
       .select('*')
       .eq('user_id', userId)
-      .is('deleted_at', null)
-      .in('date', [today, yesterday])
+      .eq('active', true)
       .order('created_at', { ascending: true })
 
-    if (error) throw error
-
-    const all = (data ?? []) as Prohibition[]
-
-    // 인증 마감 지난 active 금기 → unverified로 변경
-    const expired = all.filter(p => p.status === 'active' && isDeadlinePassed(p))
-    for (const p of expired) {
-      await supabase
-        .from('prohibitions')
-        .update({ status: 'unverified' })
-        .eq('id', p.id)
-      p.status = 'unverified'
-    }
-
-    // 반복 금기: 오늘 복사본이 없으면 가장 최근 반복 금기를 기반으로 생성
-    const todayRecurringGroups = new Set(
-      all
-        .filter(p => p.date === today && p.is_recurring)
-        .map(p => p.recurring_group_id ?? p.id)
-    )
-
-    const { data: recurringTemplates } = await supabase
+    const { data: instances } = await supabase
       .from('prohibitions')
       .select('*')
       .eq('user_id', userId)
-      .eq('is_recurring', true)
+      .not('template_id', 'is', null)
       .is('deleted_at', null)
-      .lt('date', today)
-      .order('date', { ascending: false })
+      .in('date', [today, yesterday])
 
-    if (recurringTemplates) {
-      // 같은 recurring_group_id에서 가장 최근 것만 사용
-      const seen = new Set<string>()
-      for (const rec of recurringTemplates as Prohibition[]) {
-        const recurringGroupId = rec.recurring_group_id ?? rec.id
-        if (seen.has(recurringGroupId) || todayRecurringGroups.has(recurringGroupId)) continue
-        seen.add(recurringGroupId)
-        const { data: newP } = await supabase
-          .from('prohibitions')
-          .insert({
-            user_id: userId,
-            recurring_group_id: recurringGroupId,
-            title: rec.title,
-            emoji: rec.emoji,
-            difficulty: rec.difficulty,
-            type: rec.type,
-            start_time: rec.start_time,
-            end_time: rec.end_time,
-            date: today,
-            is_recurring: true,
-            verify_deadline_hours: rec.verify_deadline_hours,
-          })
-          .select()
-          .single()
-        if (newP) all.push(newP as Prohibition)
-      }
-    }
+    const { data: oneOffs } = await supabase
+      .from('prohibitions')
+      .select('*')
+      .eq('user_id', userId)
+      .is('template_id', null)
+      .is('deleted_at', null)
+      .eq('date', today)
+      .order('created_at', { ascending: true })
 
-    // 어제 것 중 마감 안 지난 active만 표시 + 오늘 것 전부
-    const visible = all.filter(p =>
-      p.date === today || (p.date === yesterday && p.status === 'active' && !isDeadlinePassed(p))
+    // Expired active marking is handled by the cron job (mark-unverified).
+    // Client-side marking would silently fail for rows older than yesterday
+    // due to the RLS UPDATE policy (date >= CURRENT_DATE - 1 day).
+
+    const items = mergeTemplatesAndInstances(
+      (templates ?? []) as ProhibitionTemplate[],
+      (instances ?? []) as Prohibition[],
+      (oneOffs ?? []) as Prohibition[],
+      today,
+      yesterday,
     )
 
-    set({ prohibitions: visible, loading: false })
+    set({ items, loading: false })
   },
 
-  fetchHistory: async (userId: string, title: string) => {
-    const { data, error } = await supabase
+  fetchHistory: async (userId: string, templateIdOrTitle: string) => {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(templateIdOrTitle)
+    let query = supabase
       .from('prohibitions')
       .select('*')
       .eq('user_id', userId)
-      .eq('title', title)
       .is('deleted_at', null)
       .order('date', { ascending: false })
       .limit(30)
 
+    if (isUuid) {
+      query = query.eq('template_id', templateIdOrTitle)
+    } else {
+      query = query.eq('title', templateIdOrTitle)
+    }
+
+    const { data, error } = await query
     if (error) throw error
     return (data ?? []) as Prohibition[]
   },
 
   create: async (userId: string, input: CreateProhibitionInput) => {
-    const today = new Date().toISOString().split('T')[0]
-    const { data, error } = await supabase
-      .from('prohibitions')
-      .insert({ ...input, user_id: userId, date: today })
-      .select()
-      .single()
+    const today = getLocalToday()
 
-    if (error) throw error
-    set({ prohibitions: [...get().prohibitions, data as Prohibition] })
-  },
-
-  updateStatus: async (id: string, status: ProhibitionStatus) => {
-    const prohibition = get().prohibitions.find(p => p.id === id)
-    if (!prohibition || !isValidTransition(prohibition.status, status)) {
-      throw new Error(`Invalid transition: ${prohibition?.status} → ${status}`)
+    if (input.is_recurring) {
+      const { error } = await supabase
+        .from('prohibition_templates')
+        .insert({
+          user_id: userId,
+          title: input.title,
+          emoji: input.emoji,
+          difficulty: input.difficulty,
+          type: input.type,
+          start_time: input.type === 'timed' ? input.start_time : null,
+          end_time: input.type === 'timed' ? input.end_time : null,
+          verify_deadline_hours: input.verify_deadline_hours,
+        })
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('prohibitions')
+        .insert({
+          user_id: userId,
+          title: input.title,
+          emoji: input.emoji,
+          difficulty: input.difficulty,
+          type: input.type,
+          start_time: input.type === 'timed' ? input.start_time : null,
+          end_time: input.type === 'timed' ? input.end_time : null,
+          date: today,
+          is_recurring: false,
+          verify_deadline_hours: input.verify_deadline_hours,
+        })
+      if (error) throw error
     }
 
-    const { error } = await supabase.rpc('update_prohibition_status', {
-      prohibition_id: id,
-      new_status: status,
-    })
-
-    if (error) throw error
-    set({
-      prohibitions: get().prohibitions.map(p =>
-        p.id === id ? { ...p, status } : p
-      ),
-    })
+    await get().fetchToday(userId)
   },
 
-  deleteProhibition: async (id: string) => {
-    const { error } = await supabase
-    .from('prohibitions')
-    .update(  { deleted_at: new Date().toISOString() }).eq('id', id)
-    if (error) throw error
-    set({ prohibitions: get().prohibitions.filter(p => p.id !== id) })
+  updateStatus: async (userId: string, item: ProhibitionListItem, status: ProhibitionStatus): Promise<string> => {
+    if (!isValidTransition(item.status, status)) {
+      throw new Error(`Invalid transition: ${item.status} → ${status}`)
+    }
+
+    let resolvedId = item.id
+
+    if (item.templateId && item.templateId === item.id) {
+      // Template shown as "active" (no instance yet) — create the instance
+      const today = getLocalToday()
+      const { data, error } = await supabase
+        .from('prohibitions')
+        .insert({
+          template_id: item.templateId,
+          user_id: userId,
+          title: item.title,
+          emoji: item.emoji,
+          difficulty: item.difficulty,
+          type: item.type,
+          start_time: item.start_time,
+          end_time: item.end_time,
+          date: item.date || today,
+          status,
+          is_recurring: true,
+          verify_deadline_hours: item.verify_deadline_hours,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      resolvedId = data.id
+    } else {
+      // Existing instance — use RPC for safe transition
+      const { error } = await supabase.rpc('update_prohibition_status', {
+        prohibition_id: item.id,
+        new_status: status,
+      })
+      if (error) throw error
+    }
+
+    // Refresh from DB to avoid race with fetchToday interval
+    await get().fetchToday(userId)
+
+    return resolvedId
+  },
+
+  deleteProhibition: async (item: ProhibitionListItem) => {
+    if (item.templateId) {
+      // Deactivate template
+      const { error } = await supabase
+        .from('prohibition_templates')
+        .update({ active: false })
+        .eq('id', item.templateId)
+      if (error) throw error
+
+      // Also soft-delete today's instance if it exists
+      if (item.id !== item.templateId) {
+        await supabase
+          .from('prohibitions')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', item.id)
+      }
+    } else {
+      const { error } = await supabase
+        .from('prohibitions')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', item.id)
+      if (error) throw error
+    }
+
+    set({ items: get().items.filter(i => i.id !== item.id) })
   },
 }))

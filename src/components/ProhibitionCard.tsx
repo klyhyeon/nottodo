@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import type { Prohibition } from '../lib/types'
+import type { ProhibitionListItem } from '../lib/types'
 
 const statusConfig = {
   active: { label: '진행중', bg: 'bg-gray-100', text: 'text-gray-400' },
@@ -9,7 +9,7 @@ const statusConfig = {
 } as const
 
 interface Props {
-  prohibition: Prohibition
+  prohibition: ProhibitionListItem
 }
 
 export default function ProhibitionCard({ prohibition }: Props) {
