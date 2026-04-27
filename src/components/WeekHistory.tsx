@@ -1,3 +1,4 @@
+import { formatLocalDate } from '../lib/date-utils'
 import type { Prohibition } from '../lib/types'
 
 interface Props {
@@ -33,8 +34,8 @@ export default function WeekHistory({ history }: Props) {
       <div className="text-sm font-bold text-primary mb-2.5">최근 7일</div>
       <div className="flex justify-between gap-1">
         {days.map(d => {
-          const dateStr = d.toISOString().split('T')[0]
-          const isToday = dateStr === today.toISOString().split('T')[0]
+          const dateStr = formatLocalDate(d)
+          const isToday = dateStr === formatLocalDate(today)
           const record = history.find(h => h.date === dateStr)
           const status = record?.status ?? 'unverified'
 
